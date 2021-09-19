@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, HashSet}, convert::TryFrom, fs};
+use std::{collections::{HashMap, HashSet}, convert::TryFrom, fmt, fs};
 
 use pest::Parser;
 
@@ -33,7 +33,7 @@ impl TryFrom<&str> for OpenMetricsType {
             "summary" => Ok(OpenMetricsType::Summary),
             "info" => Ok(OpenMetricsType::Info),
             "unknown" => Ok(OpenMetricsType::Unknown),
-            _ => Err(OpenMetricsParseError::InvalidType)
+            _ => Err(OpenMetricsParseError::InvalidType(value.to_owned()))
         }
     }
 }
@@ -66,13 +66,27 @@ pub enum OpenMetricsParseError {
     DuplicateType,
     DuplicateUnit,
     InterwovenMetricFamily,
-    InvalidType,
+    InvalidType(String),
     InvalidLabel
 }
 
 impl From<pest::error::Error<Rule>> for OpenMetricsParseError {
     fn from(err: pest::error::Error<Rule>) -> Self {
         return OpenMetricsParseError::ParseError(err);
+    }
+}
+
+impl fmt::Display for OpenMetricsParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            OpenMetricsParseError::ParseError(e) => e.fmt(f),
+            OpenMetricsParseError::DuplicateHelp => f.write_str("Cannot have multiple help lines for a single metric"),
+            OpenMetricsParseError::DuplicateType => f.write_str("Cannot have multiple types for a single metric"),
+            OpenMetricsParseError::DuplicateUnit => f.write_str("Cannot have multiple units for a single metric"),
+            OpenMetricsParseError::InterwovenMetricFamily => f.write_str("Cannot interweave metric families"),
+            OpenMetricsParseError::InvalidType(s) => f.write_str(format!("Invalid Type: {}", s).as_str()),
+            OpenMetricsParseError::InvalidLabel => f.write_str("Invalid Label"),
+        }
     }
 }
 
@@ -230,7 +244,7 @@ pub fn parse_openmetrics(exposition_bytes: &str) -> Result<MetricsExposition<Ope
                 let unit = descriptor.next().unwrap().as_str();
                 family.try_add_unit(unit.to_string())?;
             }
-            _ => panic!()
+            _ => unreachable!()
         }
 
         return Ok(());
@@ -309,7 +323,7 @@ pub fn parse_openmetrics(exposition_bytes: &str) -> Result<MetricsExposition<Ope
                 exposition.families.insert(family.name.clone(), family);
             },
             Rule::kw_eof => break,
-            _ => panic!()
+            _ => unreachable!()
         }
     }
 
