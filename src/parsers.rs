@@ -45,7 +45,7 @@ impl Default for OpenMetricsType {
 }
 
 #[derive(Debug)]
-pub struct MetricMarshall {
+struct MetricMarshall {
     label_values: Vec<String>,
     value: MetricValue
 }
@@ -77,7 +77,7 @@ impl From<pest::error::Error<Rule>> for OpenMetricsParseError {
 }
 
 #[derive(Debug)]
-pub struct MetricFamilyMarshal<TypeSet> {
+struct MetricFamilyMarshal<TypeSet> {
     name: Option<String>,
     label_names: Option<Vec<String>>,
     family_type: Option<TypeSet>,
