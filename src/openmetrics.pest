@@ -19,27 +19,28 @@ kw_info = { "info" }
 kw_summary = { "summary" }
 kw_unknown = { "unknown" }
 
-exposition = { metricset ~ hash ~ sp ~ kw_eof ~ "\n"? }
-metricset = { metricfamily+ }
-metricfamily = { metricdescriptor* ~ metric+ }
+exposition = ${ metricset ~ hash ~ sp ~ kw_eof ~ "\n"? }
+metricset = _{ metricfamily+ }
+metricfamily = ${ (metricdescriptor* ~ metric+) | (metricdescriptor+ ~ metric*) }
 
 metricdescriptor = ${ 
                      (hash ~ sp ~ kw_type ~ sp ~ metricname ~ sp ~ metrictype ~ "\n") | 
                      (hash ~ sp ~ kw_help ~ sp ~ metricname ~ sp ~ escapedstring ~ "\n") | 
-                     (hash ~ sp ~ kw_unit ~ sp ~ metricname ~ sp ~ metricname_char ~ "\n")
+                     (hash ~ sp ~ kw_unit ~ sp ~ metricname ~ sp ~ metricunit ~ "\n")
                    }
 
-metric = { sample+ }
-metrictype = { kw_counter | kw_gauge | kw_histogram | kw_gaugehistogram | kw_statefulset | kw_info | kw_summary | kw_unknown }
+metric = _{ sample+ }
+metrictype = @{ kw_counter | kw_gauge | kw_histogram | kw_gaugehistogram | kw_statefulset | kw_info | kw_summary | kw_unknown }
+metricunit = { metricname_char+ }
 
 sample = ${ metricname ~ labels? ~ sp ~ number ~ (sp ~ timestamp)? ~ exemplar? ~ "\n" }
 exemplar = ${ sp ~ hash ~ sp ~ labels ~ sp ~ number ~ (sp ~ timestamp)? }
-labels = @{ "{" ~ label ~ (comma ~ label)* ~ "}" }
-label = @{ labelname ~ eq ~ dquote ~ escapedstring ~ dquote }
+labels = _{ "{" ~ label ~ (comma ~ label)* ~ "}" }
+label = { labelname ~ eq ~ dquote ~ escapedstring ~ dquote }
 
 number = @{ realnumber | sign ~ (^"inf" | ^"infinity") | ^"nan" }
 timestamp = @{ realnumber }
-realnumber = @{ sign? ~ ASCII_DIGIT ~ ("." ~ ASCII_DIGIT*)? ~ ("e" ~ sign? ~ ASCII_DIGIT)? | sign? ~ ASCII_DIGIT }
+realnumber = @{ sign? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)? ~ ("e" ~ sign? ~ ASCII_DIGIT+)? | sign? ~ ASCII_DIGIT+ }
 
 metricname = @{ metricname_initialchar ~ metricname_char* }
 metricname_char = _{ metricname_initialchar | ASCII_DIGIT }
@@ -49,6 +50,6 @@ labelname = @{ labelname_initialchar ~ labelname_char* }
 labelname_char = _{ labelname_initialchar | ASCII_DIGIT }
 labelname_initialchar = _{ ASCII_ALPHA | "_" }
 
-escapedstring = _{ escapedchar* }
+escapedstring = { escapedchar* }
 escapedchar = _{normalchar | (backslash ~ (backslash | "n" | dquote))}
 normalchar = _{ !("\n" | "\"" | "\\") ~ ANY }
