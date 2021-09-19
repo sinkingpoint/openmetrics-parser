@@ -1,0 +1,54 @@
+sign = _{ "+" | "-" }
+backslash = _{ "\\" }
+dquote = _{ "\"" }
+eq = _{ "=" }
+comma = _{ "," }
+hash = _{ "#" }
+sp = _{ (" ")+ }
+
+kw_type = { "TYPE" }
+kw_help = { "HELP" }
+kw_unit = { "UNIT" }
+kw_eof = { "EOF" }
+kw_counter = { "counter" }
+kw_gauge = { "gauge" }
+kw_histogram = { "histogram" }
+kw_gaugehistogram = { "gaugehistogram" }
+kw_statefulset = { "statefulset" }
+kw_info = { "info" }
+kw_summary = { "summary" }
+kw_unknown = { "unknown" }
+
+exposition = { metricset ~ hash ~ sp ~ kw_eof ~ "\n"? }
+metricset = { metricfamily+ }
+metricfamily = { metricdescriptor* ~ metric+ }
+
+metricdescriptor = ${ 
+                     (hash ~ sp ~ kw_type ~ sp ~ metricname ~ sp ~ metrictype ~ "\n") | 
+                     (hash ~ sp ~ kw_help ~ sp ~ metricname ~ sp ~ escapedstring ~ "\n") | 
+                     (hash ~ sp ~ kw_unit ~ sp ~ metricname ~ sp ~ metricname_char ~ "\n")
+                   }
+
+metric = { sample+ }
+metrictype = { kw_counter | kw_gauge | kw_histogram | kw_gaugehistogram | kw_statefulset | kw_info | kw_summary | kw_unknown }
+
+sample = ${ metricname ~ labels? ~ sp ~ number ~ (sp ~ timestamp)? ~ exemplar? ~ "\n" }
+exemplar = ${ sp ~ hash ~ sp ~ labels ~ sp ~ number ~ (sp ~ timestamp)? }
+labels = @{ "{" ~ label ~ (comma ~ label)* ~ "}" }
+label = @{ labelname ~ eq ~ dquote ~ escapedstring ~ dquote }
+
+number = @{ realnumber | sign ~ (^"inf" | ^"infinity") | ^"nan" }
+timestamp = @{ realnumber }
+realnumber = @{ sign? ~ ASCII_DIGIT ~ ("." ~ ASCII_DIGIT*)? ~ ("e" ~ sign? ~ ASCII_DIGIT)? | sign? ~ ASCII_DIGIT }
+
+metricname = @{ metricname_initialchar ~ metricname_char* }
+metricname_char = _{ metricname_initialchar | ASCII_DIGIT }
+metricname_initialchar = _{ ASCII_ALPHA | "_" | ":" }
+
+labelname = @{ labelname_initialchar ~ labelname_char* }
+labelname_char = _{ labelname_initialchar | ASCII_DIGIT }
+labelname_initialchar = _{ ASCII_ALPHA | "_" }
+
+escapedstring = _{ escapedchar* }
+escapedchar = _{normalchar | (backslash ~ (backslash | "n" | dquote))}
+normalchar = _{ !("\n" | "\"" | "\\") ~ ANY }
