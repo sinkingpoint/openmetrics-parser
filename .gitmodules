@@ -1,0 +1,3 @@
+[submodule "OpenMetrics"]
+	path = OpenMetrics
+	url = git@github.com:OpenObservability/OpenMetrics.git
