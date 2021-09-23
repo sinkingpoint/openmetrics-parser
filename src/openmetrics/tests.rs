@@ -1,5 +1,5 @@
-use std::{fs, path::PathBuf};
 use serde::Deserialize;
+use std::{fs, path::PathBuf};
 
 #[derive(Deserialize, Debug)]
 struct TestMeta {
@@ -7,7 +7,7 @@ struct TestMeta {
     exposition_format: String,
     file: String,
     #[serde(alias = "shouldParse")]
-    should_parse: bool
+    should_parse: bool,
 }
 
 fn read_child_file(parent: &PathBuf, filename: &str) -> String {
@@ -17,7 +17,6 @@ fn read_child_file(parent: &PathBuf, filename: &str) -> String {
 
     assert!(child_path.exists());
     assert!(child_path.is_file());
-    
 
     let child_str = fs::read_to_string(child_path);
     assert!(child_str.is_ok());
@@ -40,7 +39,7 @@ fn run_openmetrics_validation() {
 
         let metrics_str = read_child_file(&path, "metrics");
         let test_meta_str = read_child_file(&path, "test.json");
-        
+
         let meta = serde_json::from_str::<TestMeta>(&test_meta_str);
         assert!(meta.is_ok());
         let meta = meta.unwrap();
@@ -50,10 +49,19 @@ fn run_openmetrics_validation() {
         let metrics_str = metrics_str.replace(" ", ".").replace("\t", "->");
 
         if meta.should_parse {
-            assert!(parsed.is_ok(), "\n{}\n Test should parse, but didn't ({:?})", metrics_str, parsed);
-        }
-        else {
-            assert!(parsed.is_err(), "\n{}\n Test shouldn't parse, but did ({:?})", metrics_str, parsed);
+            assert!(
+                parsed.is_ok(),
+                "\n{}\n Test should parse, but didn't ({:?})",
+                metrics_str,
+                parsed
+            );
+        } else {
+            assert!(
+                parsed.is_err(),
+                "\n{}\n Test shouldn't parse, but did ({:?})",
+                metrics_str,
+                parsed
+            );
         }
     }
 }
