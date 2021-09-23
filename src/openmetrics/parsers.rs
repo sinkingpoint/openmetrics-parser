@@ -8,40 +8,24 @@ pub struct OpenMetricsParser;
 
 type Timestamp = f64;
 
-trait MarshalledMetricFamily {
-    type Error;
-    fn process_new_metric(&mut self, metric_name: &str, value: MetricNumber, label_names: Vec<String>, label_values: Vec<String>, timestamp: Option<Timestamp>, exemplar: Option<Exemplar>) -> Result<(), Self::Error>;
-}
-
 trait MetricType {
     fn can_have_exemplar(&self, metric_name: &str) -> bool;
     fn is_allowed_units(&self) -> bool;
     fn get_ignored_labels(&self, metric_name: &str) -> &[&str];
-    fn get_type_value(&self) -> MetricValue;
+    fn get_type_value(&self) -> MetricValueMarshal;
     fn can_have_multiple_lines(&self) -> bool;
 }
 
-#[derive(Debug, Clone)]
-pub enum MetricNumber {
-    Float(f64),
-    Int(i64)
-}
-
-impl MetricNumber {
-    fn as_f64(&self) -> f64 {
-        match self {
-            MetricNumber::Int(i) => *i as f64,
-            MetricNumber::Float(f) => *f
-        }
-    }
-
-    fn as_i64(&self) -> Option<i64> {
-        match self {
-            MetricNumber::Int(i) => Some(*i),
-            MetricNumber::Float(f) if f.round() == *f => Some(*f as i64),
-            _ => None
-        }
-    }
+#[derive(Debug)]
+enum MetricValueMarshal {
+    Unknown(Option<MetricNumber>),
+    Gauge(Option<MetricNumber>),
+    Counter(CounterValue),
+    Histogram(HistogramValue),
+    StateSet(Option<MetricNumber>),
+    GaugeHistogram(HistogramValue),
+    Info,
+    Summary(SummaryValue),
 }
 
 #[derive(Debug)]
@@ -73,137 +57,71 @@ impl<TypeSet> LabelNames<TypeSet> where TypeSet: MetricType {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct CounterValue {
-    value: Option<MetricNumber>,
-    created: Option<Timestamp>,
-    exemplar: Option<Exemplar>
-}
-
-#[derive(Debug, Clone)]
-pub struct HistogramBucket {
-    count: MetricNumber,
-    upper_bound: f64,
-    exemplar: Option<Exemplar>
-}
-
-#[derive(Debug, Default)]
-pub struct HistogramValue {
-    sum: Option<MetricNumber>,
-    count: Option<u64>,
-    timestamp: Option<Timestamp>,
-    buckets: Vec<HistogramBucket>
-}
-
-#[derive(Debug)]
-pub struct State {
-    name: String,
-    enabled: bool
-}
-
-#[derive(Debug)]
-pub struct Quantile {
-    quantile: f64,
-    value: MetricNumber
-}
-
-#[derive(Debug, Default)]
-pub struct SummaryValue {
-    sum: Option<MetricNumber>,
-    count: Option<u64>,
-    timestamp: Option<Timestamp>,
-    quantiles: Vec<Quantile>
-}
-
-#[derive(Debug)]
-pub enum MetricValue {
-    Unknown(Option<MetricNumber>),
-    Gauge(Option<MetricNumber>),
-    Counter(CounterValue),
-    Histogram(HistogramValue),
-    StateSet(Option<MetricNumber>),
-    GaugeHistogram(HistogramValue),
-    Info,
-    Summary(SummaryValue),
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub enum OpenMetricsType {
-    Counter,
-    Gauge,
-    Histogram,
-    GaugeHistogram,
-    StateSet,
-    Summary,
-    Info,
-    Unknown
-}
-
-impl MetricType for OpenMetricsType {
+impl MetricType for MetricType {
     fn can_have_exemplar(&self, metric_name: &str) -> bool {
         match self {
-            OpenMetricsType::Counter => metric_name.ends_with("_total"),
-            OpenMetricsType::Histogram | OpenMetricsType::GaugeHistogram => metric_name.ends_with("_bucket"),
+            MetricType::Counter => metric_name.ends_with("_total"),
+            MetricType::Histogram | MetricType::GaugeHistogram => metric_name.ends_with("_bucket"),
             _ => false
         }
     }
 
     fn get_ignored_labels(&self, metric_name: &str) -> &[&str] {
         match self {
-            OpenMetricsType::Histogram | OpenMetricsType::GaugeHistogram if metric_name.ends_with("bucket") => &["le"],
+            MetricType::Histogram | MetricType::GaugeHistogram if metric_name.ends_with("bucket") => &["le"],
             _ => &[]
         }
     }
 
-    fn get_type_value(&self) -> MetricValue {
+    fn get_type_value(&self) -> MetricValueMarshal {
         match self {
-            OpenMetricsType::Histogram=> MetricValue::Histogram(HistogramValue::default()),
-            OpenMetricsType::GaugeHistogram => MetricValue::GaugeHistogram(HistogramValue::default()),
-            OpenMetricsType::Counter => MetricValue::Counter(CounterValue::default()),
-            OpenMetricsType::Unknown => MetricValue::Unknown(None),
-            OpenMetricsType::Gauge => MetricValue::Gauge(None),
-            OpenMetricsType::StateSet => MetricValue::StateSet(None),
-            OpenMetricsType::Summary => MetricValue::Summary(SummaryValue::default()),
-            OpenMetricsType::Info => MetricValue::Info,
+            MetricType::Histogram=> MetricValueMarshal::Histogram(HistogramValue::default()),
+            MetricType::GaugeHistogram => MetricValueMarshal::GaugeHistogram(HistogramValue::default()),
+            MetricType::Counter => MetricValueMarshal::Counter(CounterValue::default()),
+            MetricType::Unknown => MetricValueMarshal::Unknown(None),
+            MetricType::Gauge => MetricValueMarshal::Gauge(None),
+            MetricType::StateSet => MetricValueMarshal::StateSet(None),
+            MetricType::Summary => MetricValueMarshal::Summary(SummaryValue::default()),
+            MetricType::Info => MetricValueMarshal::Info,
         }
     }
 
     fn is_allowed_units(&self) -> bool {
         match self {
-            OpenMetricsType::Counter | OpenMetricsType::Unknown | OpenMetricsType::Gauge => true,
+            MetricType::Counter | MetricType::Unknown | MetricType::Gauge => true,
             _ => false
         }
     }
 
     fn can_have_multiple_lines(&self) -> bool {
         match self {
-            OpenMetricsType::Counter | OpenMetricsType::GaugeHistogram | OpenMetricsType::Histogram | OpenMetricsType::Summary => true,
+            MetricType::Counter | MetricType::GaugeHistogram | MetricType::Histogram | MetricType::Summary => true,
             _ => false
         }
     }
 }
 
-impl TryFrom<&str> for OpenMetricsType {
+impl TryFrom<&str> for MetricType {
     type Error = OpenMetricsParseError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
-            "counter" => Ok(OpenMetricsType::Counter),
-            "gauge" => Ok(OpenMetricsType::Gauge),
-            "histogram" => Ok(OpenMetricsType::Histogram),
-            "gaugehistogram" => Ok(OpenMetricsType::GaugeHistogram),
-            "stateset" => Ok(OpenMetricsType::StateSet),
-            "summary" => Ok(OpenMetricsType::Summary),
-            "info" => Ok(OpenMetricsType::Info),
-            "unknown" => Ok(OpenMetricsType::Unknown),
+            "counter" => Ok(MetricType::Counter),
+            "gauge" => Ok(MetricType::Gauge),
+            "histogram" => Ok(MetricType::Histogram),
+            "gaugehistogram" => Ok(MetricType::GaugeHistogram),
+            "stateset" => Ok(MetricType::StateSet),
+            "summary" => Ok(MetricType::Summary),
+            "info" => Ok(MetricType::Info),
+            "unknown" => Ok(MetricType::Unknown),
             _ => Err(OpenMetricsParseError::InvalidMetric(format!("Invalid metric type: {}", value)))
         }
     }
 }
 
-impl Default for OpenMetricsType {
-    fn default() -> OpenMetricsType {
-        return OpenMetricsType::Unknown;
+impl Default for MetricType {
+    fn default() -> MetricType {
+        return MetricType::Unknown;
     }
 }
 
@@ -211,11 +129,11 @@ impl Default for OpenMetricsType {
 struct MetricMarshal {
     label_values: Vec<String>,
     timestamp: Option<Timestamp>,
-    value: MetricValue
+    value: MetricValueMarshal
 }
 
 impl MetricMarshal {
-    fn new(label_values: Vec<String>, timestamp: Option<Timestamp>, value: MetricValue) -> MetricMarshal {
+    fn new(label_values: Vec<String>, timestamp: Option<Timestamp>, value: MetricValueMarshal) -> MetricMarshal {
         return MetricMarshal {
             label_values,
             timestamp,
@@ -234,8 +152,8 @@ impl MetricMarshal {
         }
 
         match &self.value {
-            MetricValue::Histogram(histogram_value) | MetricValue::GaugeHistogram(histogram_value) => {
-                let gauge_histogram = if let MetricValue::GaugeHistogram(_) = &self.value {
+            MetricValueMarshal::Histogram(histogram_value) | MetricValueMarshal::GaugeHistogram(histogram_value) => {
+                let gauge_histogram = if let MetricValueMarshal::GaugeHistogram(_) = &self.value {
                     true
                 }
                 else {
@@ -333,13 +251,12 @@ impl MetricProcesser {
     }
 }
 
-
-impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
+impl MarshalledMetricFamily for MetricFamilyMarshal<MetricType> {
     type Error = OpenMetricsParseError;
 
     fn process_new_metric(&mut self, metric_name: &str, metric_value: MetricNumber, label_names: Vec<String>, label_values: Vec<String>, timestamp: Option<Timestamp>, exemplar: Option<Exemplar>) -> Result<(), Self::Error> {
         let handlers = vec![
-            (vec![OpenMetricsType::Histogram], vec![
+            (vec![MetricType::Histogram], vec![
                 ("_bucket", vec!["le"], MetricProcesser::new(|existing_metric: &mut MetricMarshal, metric_value: MetricNumber, label_names: Vec<String>, label_values: Vec<String>, exemplar: Option<Exemplar>, _: bool| {
                     let bucket_bound: f64 = {
                         let bound_index = label_names.iter().position(|s| s == "le").unwrap();
@@ -353,7 +270,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
 
                     let bucket = HistogramBucket { count: metric_value, upper_bound: bucket_bound, exemplar };
 
-                    if let MetricValue::Histogram(value) = &mut existing_metric.value {
+                    if let MetricValueMarshal::Histogram(value) = &mut existing_metric.value {
                         value.buckets.push(bucket);
                     }
                     else {
@@ -363,7 +280,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                     return Ok(());
                 })),
                 ("_count", vec![], MetricProcesser::new(|existing_metric: &mut MetricMarshal, metric_value: MetricNumber, _: Vec<String>, _: Vec<String>, _: Option<Exemplar>, _: bool|{
-                    if let MetricValue::Histogram(histogram_value) = &mut existing_metric.value {
+                    if let MetricValueMarshal::Histogram(histogram_value) = &mut existing_metric.value {
                         let metric_value = if let Some(value) = metric_value.as_i64() {
                             if value < 0 {
                                 return Err(OpenMetricsParseError::InvalidMetric(format!("Histogram counts must be positive (got: {})", value)));
@@ -387,7 +304,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                     return Ok(());
                 })),
                 ("_created", vec![], MetricProcesser::new(|existing_metric: &mut MetricMarshal, metric_value: MetricNumber, _: Vec<String>, _: Vec<String>, _: Option<Exemplar>, _: bool|{
-                    if let MetricValue::Histogram(histogram_value) = &mut existing_metric.value {
+                    if let MetricValueMarshal::Histogram(histogram_value) = &mut existing_metric.value {
                         match histogram_value.timestamp {
                             Some(_) => {return Err(OpenMetricsParseError::DuplicateMetric);},
                             None => {histogram_value.timestamp = Some(metric_value.as_f64());},
@@ -400,7 +317,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                     return Ok(());
                 })),
                 ("_sum", vec![], MetricProcesser::new(|existing_metric: &mut MetricMarshal, metric_value: MetricNumber, _: Vec<String>, _: Vec<String>, _: Option<Exemplar>, _: bool|{
-                    if let MetricValue::Histogram(histogram_value) = &mut existing_metric.value {
+                    if let MetricValueMarshal::Histogram(histogram_value) = &mut existing_metric.value {
                         if histogram_value.sum.is_some() {
                             return Err(OpenMetricsParseError::DuplicateMetric);
                         }
@@ -414,7 +331,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                     }
                 })),
             ]),
-            (vec![OpenMetricsType::GaugeHistogram], vec![
+            (vec![MetricType::GaugeHistogram], vec![
                 ("_bucket", vec!["le"], MetricProcesser::new(|existing_metric: &mut MetricMarshal, metric_value: MetricNumber, label_names: Vec<String>, label_values: Vec<String>, exemplar: Option<Exemplar>, _: bool| {
                     let bucket_bound: f64 = {
                         let bound_index = label_names.iter().position(|s| s == "le").unwrap();
@@ -428,7 +345,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
 
                     let bucket = HistogramBucket { count: metric_value, upper_bound: bucket_bound, exemplar };
 
-                    if let MetricValue::GaugeHistogram(value) = &mut existing_metric.value {
+                    if let MetricValueMarshal::GaugeHistogram(value) = &mut existing_metric.value {
                         value.buckets.push(bucket);
                     }
                     else {
@@ -438,7 +355,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                     return Ok(());
                 })),
                 ("_gcount", vec![], MetricProcesser::new(|existing_metric: &mut MetricMarshal, metric_value: MetricNumber, _: Vec<String>, _: Vec<String>, _: Option<Exemplar>, _: bool|{
-                    if let MetricValue::GaugeHistogram(histogram_value) = &mut existing_metric.value {
+                    if let MetricValueMarshal::GaugeHistogram(histogram_value) = &mut existing_metric.value {
                         let metric_value = if let Some(value) = metric_value.as_i64() {
                             if value < 0 {
                                 return Err(OpenMetricsParseError::InvalidMetric(format!("Histogram counts must be positive (got: {})", value)));
@@ -462,7 +379,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                     return Ok(());
                 })),
                 ("_gsum", vec![], MetricProcesser::new(|existing_metric: &mut MetricMarshal, metric_value: MetricNumber, _: Vec<String>, _: Vec<String>, _: Option<Exemplar>, _: bool|{
-                    if let MetricValue::GaugeHistogram(histogram_value) = &mut existing_metric.value {
+                    if let MetricValueMarshal::GaugeHistogram(histogram_value) = &mut existing_metric.value {
                         if histogram_value.sum.is_some() {
                             return Err(OpenMetricsParseError::DuplicateMetric);
                         }
@@ -476,9 +393,9 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                     }
                 })),
             ]),
-            (vec![OpenMetricsType::Counter], vec![
+            (vec![MetricType::Counter], vec![
                 ("_total", vec![], MetricProcesser::new(|existing_metric: &mut MetricMarshal, metric_value: MetricNumber, _: Vec<String>, _: Vec<String>, _: Option<Exemplar>, _: bool|{
-                    if let MetricValue::Counter(counter_value) = &mut existing_metric.value {
+                    if let MetricValueMarshal::Counter(counter_value) = &mut existing_metric.value {
                         if counter_value.value.is_some() {
                             return Err(OpenMetricsParseError::DuplicateMetric);
                         }
@@ -497,7 +414,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                     return Ok(());
                 })),
                 ("_created", vec![], MetricProcesser::new(|existing_metric: &mut MetricMarshal, metric_value: MetricNumber, _: Vec<String>, _: Vec<String>, _: Option<Exemplar>, _: bool|{
-                    if let MetricValue::Counter(counter_value) = &mut existing_metric.value {
+                    if let MetricValueMarshal::Counter(counter_value) = &mut existing_metric.value {
                         if counter_value.created.is_some() {
                             return Err(OpenMetricsParseError::DuplicateMetric);
                         }
@@ -510,14 +427,14 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                     }
                 }))
             ]),
-            (vec![OpenMetricsType::Gauge], vec![
+            (vec![MetricType::Gauge], vec![
                 ("", vec![], MetricProcesser::new(|existing_metric: &mut MetricMarshal, metric_value: MetricNumber, _: Vec<String>, _: Vec<String>, _: Option<Exemplar>, _: bool|{
-                    if let MetricValue::Gauge(gauge_value) = &mut existing_metric.value {
+                    if let MetricValueMarshal::Gauge(gauge_value) = &mut existing_metric.value {
                         if gauge_value.is_some() {
                             return Err(OpenMetricsParseError::DuplicateMetric);
                         }
 
-                        existing_metric.value = MetricValue::Gauge(Some(metric_value));
+                        existing_metric.value = MetricValueMarshal::Gauge(Some(metric_value));
                     }
                     else {
                         unreachable!();
@@ -526,9 +443,9 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                     return Ok(());
                 }))
             ]),
-            (vec![OpenMetricsType::StateSet], vec![
+            (vec![MetricType::StateSet], vec![
                 ("", vec![], MetricProcesser::new(|existing_metric: &mut MetricMarshal, metric_value: MetricNumber, _: Vec<String>, _: Vec<String>, _: Option<Exemplar>, _: bool|{
-                    if let MetricValue::StateSet(stateset_value) = &mut existing_metric.value {
+                    if let MetricValueMarshal::StateSet(stateset_value) = &mut existing_metric.value {
                         if stateset_value.is_some() {
                             return Err(OpenMetricsParseError::DuplicateMetric);
                         }
@@ -541,7 +458,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                             return Err(OpenMetricsParseError::InvalidMetric(format!("Stateset value must be 0 or 1 (got: {})", metric_value.as_f64())));
                         }
 
-                        existing_metric.value = MetricValue::StateSet(Some(metric_value));
+                        existing_metric.value = MetricValueMarshal::StateSet(Some(metric_value));
                     }
                     else {
                         unreachable!();
@@ -550,14 +467,14 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                     return Ok(());
                 }))
             ]),
-            (vec![OpenMetricsType::Unknown], vec![
+            (vec![MetricType::Unknown], vec![
                 ("", vec![], MetricProcesser::new(|existing_metric: &mut MetricMarshal, metric_value: MetricNumber, _: Vec<String>, _: Vec<String>, _: Option<Exemplar>, _: bool|{
-                    if let MetricValue::Unknown(unknown_value) = &mut existing_metric.value {
+                    if let MetricValueMarshal::Unknown(unknown_value) = &mut existing_metric.value {
                         if unknown_value.is_some() {
                             return Err(OpenMetricsParseError::DuplicateMetric);
                         }
 
-                        existing_metric.value = MetricValue::Unknown(Some(metric_value));
+                        existing_metric.value = MetricValueMarshal::Unknown(Some(metric_value));
                     }
                     else {
                         unreachable!();
@@ -566,7 +483,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                     return Ok(());
                 }))
             ]),
-            (vec![OpenMetricsType::Info], vec![
+            (vec![MetricType::Info], vec![
                 ("_info", vec![], MetricProcesser::new(|_: &mut MetricMarshal, metric_value: MetricNumber, _: Vec<String>, _: Vec<String>, _: Option<Exemplar>, created: bool|{
                     let metric_value = if let Some(value) = metric_value.as_i64() {
                         value as u64
@@ -586,9 +503,9 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                     return Ok(());
                 }))
             ]),
-            (vec![OpenMetricsType::Summary], vec![
+            (vec![MetricType::Summary], vec![
                 ("_count", vec![], MetricProcesser::new(|existing_metric: &mut MetricMarshal, metric_value: MetricNumber, _: Vec<String>, _: Vec<String>, _: Option<Exemplar>, _: bool|{
-                    if let MetricValue::Summary(summary_value) = &mut existing_metric.value {
+                    if let MetricValueMarshal::Summary(summary_value) = &mut existing_metric.value {
                         let metric_value = if let Some(value) = metric_value.as_i64() {
                             if value < 0 {
                                 return Err(OpenMetricsParseError::InvalidMetric(format!("Summary counts must be positive (got: {})", value)));
@@ -619,7 +536,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                     }
 
 
-                    if let MetricValue::Summary(summary_value) = &mut existing_metric.value {
+                    if let MetricValueMarshal::Summary(summary_value) = &mut existing_metric.value {
                         if let None = summary_value.sum {
                             summary_value.sum = Some(metric_value);
                             return Ok(());
@@ -654,7 +571,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
 
                     let quantile = Quantile{quantile: bucket_bound, value: metric_value};
 
-                    if let MetricValue::Summary(summary_value) = &mut existing_metric.value {
+                    if let MetricValueMarshal::Summary(summary_value) = &mut existing_metric.value {
                         summary_value.quantiles.push(quantile);
                     }
                     else {
@@ -715,7 +632,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                             }
                         },
                         None => {
-                            let new_metric = self.family_type.as_ref().unwrap_or(&OpenMetricsType::Unknown).get_type_value();
+                            let new_metric = self.family_type.as_ref().unwrap_or(&MetricType::Unknown).get_type_value();
                             self.add_metric(MetricMarshal::new(actual_label_values.clone(), timestamp, new_metric));
                             (self.get_metric_by_labelset_mut(&actual_label_values).unwrap(), true)
                         }
@@ -872,10 +789,10 @@ impl Exemplar {
     }
 }
 
-pub fn parse_openmetrics(exposition_bytes: &str) -> Result<MetricsExposition<OpenMetricsType>, OpenMetricsParseError> {
+pub fn parse_openmetrics(exposition_bytes: &str) -> Result<MetricsExposition<MetricType>, OpenMetricsParseError> {
     use pest::iterators::Pair;
 
-    fn parse_metric_descriptor(pair: Pair<Rule>, family: &mut MetricFamilyMarshal<OpenMetricsType>) -> Result<(), OpenMetricsParseError> {
+    fn parse_metric_descriptor(pair: Pair<Rule>, family: &mut MetricFamilyMarshal<MetricType>) -> Result<(), OpenMetricsParseError> {
         assert_eq!(pair.as_rule(), Rule::metricdescriptor);
 
         let mut descriptor = pair.into_inner();
@@ -891,7 +808,7 @@ pub fn parse_openmetrics(exposition_bytes: &str) -> Result<MetricsExposition<Ope
             Rule::kw_type => {
                 let family_type = descriptor.next().unwrap().as_str();
                 family.set_or_test_name(metric_name)?;
-                family.try_add_type(OpenMetricsType::try_from(family_type)?)?;
+                family.try_add_type(MetricType::try_from(family_type)?)?;
             },
             Rule::kw_unit => {
                 let unit = descriptor.next().unwrap().as_str();
@@ -958,7 +875,7 @@ pub fn parse_openmetrics(exposition_bytes: &str) -> Result<MetricsExposition<Ope
         return Ok(labels);
     }
 
-    fn parse_sample(pair: Pair<Rule>, family: &mut MetricFamilyMarshal<OpenMetricsType>) -> Result<(), OpenMetricsParseError> {
+    fn parse_sample(pair: Pair<Rule>, family: &mut MetricFamilyMarshal<MetricType>) -> Result<(), OpenMetricsParseError> {
         assert_eq!(pair.as_rule(), Rule::sample);
 
         let mut descriptor = pair.into_inner();
@@ -1009,7 +926,7 @@ pub fn parse_openmetrics(exposition_bytes: &str) -> Result<MetricsExposition<Ope
         return Ok(());
     }
 
-    fn parse_metric_family(pair: Pair<Rule>) -> Result<MetricFamily<OpenMetricsType>, OpenMetricsParseError> {
+    fn parse_metric_family(pair: Pair<Rule>) -> Result<MetricFamily<MetricType>, OpenMetricsParseError> {
         assert_eq!(pair.as_rule(), Rule::metricfamily);
 
         let mut metric_family = MetricFamilyMarshal::empty();
