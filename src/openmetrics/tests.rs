@@ -46,7 +46,7 @@ fn run_openmetrics_validation() {
         let meta = meta.unwrap();
 
         println!("\n[TEST{:?}]", test_name);
-        let parsed = crate::parse_openmetrics(&metrics_str);
+        let parsed = crate::openmetrics::parse_openmetrics(&metrics_str);
         let metrics_str = metrics_str.replace(" ", ".").replace("\t", "->");
 
         if meta.should_parse {

@@ -1,48 +1,64 @@
-trait MarshalledMetricFamily {
-    type Error;
-    fn process_new_metric(&mut self, metric_name: &str, value: MetricNumber, label_names: Vec<String>, label_values: Vec<String>, timestamp: Option<Timestamp>, exemplar: Option<Exemplar>) -> Result<(), Self::Error>;
+use std::collections::HashMap;
+
+pub type Timestamp = f64;
+
+#[derive(Debug, Clone)]
+pub struct Exemplar {
+    labels: HashMap<String, String>,
+    timestamp: Option<f64>,
+    id: f64
 }
 
-#[derive(Debug, Default)]
+impl Exemplar {
+    pub fn new(labels: HashMap<String, String>, id: f64, timestamp: Option<f64>) -> Exemplar {
+        return Exemplar {
+            labels,
+            id,
+            timestamp
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct CounterValue {
-    value: Option<MetricNumber>,
-    created: Option<Timestamp>,
-    exemplar: Option<Exemplar>
+    pub value: MetricNumber,
+    pub created: Option<Timestamp>,
+    pub exemplar: Option<Exemplar>
 }
 
 #[derive(Debug, Clone)]
 pub struct HistogramBucket {
-    count: MetricNumber,
-    upper_bound: f64,
-    exemplar: Option<Exemplar>
+    pub count: MetricNumber,
+    pub upper_bound: f64,
+    pub exemplar: Option<Exemplar>
 }
 
 #[derive(Debug, Default)]
 pub struct HistogramValue {
-    sum: Option<MetricNumber>,
-    count: Option<u64>,
-    timestamp: Option<Timestamp>,
-    buckets: Vec<HistogramBucket>
+    pub sum: Option<MetricNumber>,
+    pub count: Option<u64>,
+    pub timestamp: Option<Timestamp>,
+    pub buckets: Vec<HistogramBucket>
 }
 
 #[derive(Debug)]
 pub struct State {
-    name: String,
-    enabled: bool
+    pub name: String,
+    pub enabled: bool
 }
 
 #[derive(Debug)]
 pub struct Quantile {
-    quantile: f64,
-    value: MetricNumber
+    pub quantile: f64,
+    pub value: MetricNumber
 }
 
 #[derive(Debug, Default)]
 pub struct SummaryValue {
-    sum: Option<MetricNumber>,
-    count: Option<u64>,
-    timestamp: Option<Timestamp>,
-    quantiles: Vec<Quantile>
+    pub sum: Option<MetricNumber>,
+    pub count: Option<u64>,
+    pub timestamp: Option<Timestamp>,
+    pub quantiles: Vec<Quantile>
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -58,11 +74,11 @@ pub enum OpenMetricsType {
 }
 
 enum MetricValue {
-    Unknown(Option<MetricNumber>),
-    Gauge(Option<MetricNumber>),
+    Unknown(MetricNumber),
+    Gauge(MetricNumber),
     Counter(CounterValue),
     Histogram(HistogramValue),
-    StateSet(Option<MetricNumber>),
+    StateSet(MetricNumber),
     GaugeHistogram(HistogramValue),
     Info,
     Summary(SummaryValue),
@@ -79,14 +95,14 @@ pub enum MetricNumber {
 }
 
 impl MetricNumber {
-    fn as_f64(&self) -> f64 {
+    pub fn as_f64(&self) -> f64 {
         match self {
             MetricNumber::Int(i) => *i as f64,
             MetricNumber::Float(f) => *f
         }
     }
 
-    fn as_i64(&self) -> Option<i64> {
+    pub fn as_i64(&self) -> Option<i64> {
         match self {
             MetricNumber::Int(i) => Some(*i),
             MetricNumber::Float(f) if f.round() == *f => Some(*f as i64),
