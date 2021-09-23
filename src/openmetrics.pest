@@ -4,7 +4,8 @@ dquote = _{ "\"" }
 eq = _{ "=" }
 comma = _{ "," }
 hash = _{ "#" }
-sp = _{ (" ")+ }
+sp = _{ " " }
+msp = _{ (sp)+ }
 
 kw_type = { "TYPE" }
 kw_help = { "HELP" }
@@ -14,28 +15,28 @@ kw_counter = { "counter" }
 kw_gauge = { "gauge" }
 kw_histogram = { "histogram" }
 kw_gaugehistogram = { "gaugehistogram" }
-kw_statefulset = { "statefulset" }
+kw_statefulset = { "stateset" }
 kw_info = { "info" }
 kw_summary = { "summary" }
 kw_unknown = { "unknown" }
 
-exposition = ${ metricset ~ hash ~ sp ~ kw_eof ~ "\n"? }
+exposition = ${ metricset ~ hash ~ sp ~ kw_eof ~ NEWLINE? }
 metricset = _{ metricfamily+ }
 metricfamily = ${ (metricdescriptor* ~ metric+) | (metricdescriptor+ ~ metric*) }
 
-metricdescriptor = ${ 
-                     (hash ~ sp ~ kw_type ~ sp ~ metricname ~ sp ~ metrictype ~ "\n") | 
-                     (hash ~ sp ~ kw_help ~ sp ~ metricname ~ sp ~ escapedstring ~ "\n") | 
-                     (hash ~ sp ~ kw_unit ~ sp ~ metricname ~ sp ~ metricunit ~ "\n")
+metricdescriptor = ${
+                     (hash ~ sp ~ kw_type ~ sp ~ metricname ~ sp ~ metrictype ~ NEWLINE) | 
+                     (hash ~ sp ~ kw_help ~ sp ~ metricname ~ sp ~ helpstring ~ NEWLINE) | 
+                     (hash ~ sp ~ kw_unit ~ sp ~ metricname ~ sp ~ metricunit ~ NEWLINE)
                    }
 
 metric = _{ sample+ }
-metrictype = @{ kw_counter | kw_gauge | kw_histogram | kw_gaugehistogram | kw_statefulset | kw_info | kw_summary | kw_unknown }
-metricunit = { metricname_char+ }
+metrictype = @{ kw_gaugehistogram | kw_counter | kw_gauge |  kw_histogram | kw_statefulset | kw_info | kw_summary | kw_unknown }
+metricunit = { metricname_char* }
 
-sample = ${ metricname ~ labels? ~ sp ~ number ~ (sp ~ timestamp)? ~ exemplar? ~ "\n" }
+sample = ${ metricname ~ labels? ~ sp ~ number ~ (sp ~ timestamp)? ~ exemplar? ~ NEWLINE }
 exemplar = ${ sp ~ hash ~ sp ~ labels ~ sp ~ number ~ (sp ~ timestamp)? }
-labels = _{ "{" ~ label ~ (comma ~ label)* ~ "}" }
+labels = { "{" ~ (label ~ (comma ~ label)*)? ~ "}" }
 label = { labelname ~ eq ~ dquote ~ escapedstring ~ dquote }
 
 number = @{ realnumber | sign ~ (^"inf" | ^"infinity") | ^"nan" }
@@ -50,6 +51,8 @@ labelname = @{ labelname_initialchar ~ labelname_char* }
 labelname_char = _{ labelname_initialchar | ASCII_DIGIT }
 labelname_initialchar = _{ ASCII_ALPHA | "_" }
 
+helpstring = { helpchar* }
+helpchar = _{ !("\n") ~ ANY }
 escapedstring = { escapedchar* }
-escapedchar = _{normalchar | (backslash ~ (backslash | "n" | dquote))}
-normalchar = _{ !("\n" | "\"" | "\\") ~ ANY }
+escapedchar = _{normalchar | (backslash ~ (backslash | "n" | dquote)?)}
+normalchar = _{ !(NEWLINE | backslash | dquote) ~ ANY }
