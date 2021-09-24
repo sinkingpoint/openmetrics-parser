@@ -22,13 +22,13 @@ struct CounterValueMarshal {
     exemplar: Option<Exemplar>,
 }
 
-impl Into<CounterValue> for CounterValueMarshal {
-    fn into(self) -> CounterValue {
-        return CounterValue {
-            value: self.value.unwrap(),
-            created: self.created,
-            exemplar: self.exemplar,
-        };
+impl From<CounterValueMarshal> for CounterValue {
+    fn from(s: CounterValueMarshal) -> CounterValue {
+        CounterValue {
+            value: s.value.unwrap(),
+            created: s.created,
+            exemplar: s.exemplar,
+        }
     }
 }
 
@@ -44,9 +44,9 @@ enum MetricValueMarshal {
     Summary(SummaryValue),
 }
 
-impl Into<OpenMetricsValue> for MetricValueMarshal {
-    fn into(self) -> OpenMetricsValue {
-        match self {
+impl From<MetricValueMarshal> for OpenMetricsValue {
+    fn from(s: MetricValueMarshal) -> OpenMetricsValue {
+        match s {
             MetricValueMarshal::Unknown(s) => OpenMetricsValue::Unknown(s.unwrap()),
             MetricValueMarshal::Gauge(s) => OpenMetricsValue::Gauge(s.unwrap()),
             MetricValueMarshal::Counter(s) => OpenMetricsValue::Counter(s.into()),
@@ -69,25 +69,25 @@ impl<TypeSet> LabelNames<TypeSet>
 where
     TypeSet: MetricsType,
 {
-    fn new(sample_name: &String, metric_type: TypeSet, labels: Vec<String>) -> LabelNames<TypeSet> {
+    fn new(sample_name: &str, metric_type: TypeSet, labels: Vec<String>) -> LabelNames<TypeSet> {
         let ignored_labels = TypeSet::get_ignored_labels(&metric_type, sample_name);
         let names = labels
             .into_iter()
             .filter(|s| !ignored_labels.contains(&s.as_str()))
             .collect();
 
-        return LabelNames { names, metric_type };
+        LabelNames { names, metric_type }
     }
 
-    fn matches(&self, sample_name: &String, other_labels: &LabelNames<TypeSet>) -> bool {
+    fn matches(&self, sample_name: &str, other_labels: &LabelNames<TypeSet>) -> bool {
         let ignored_labels = TypeSet::get_ignored_labels(&self.metric_type, sample_name);
         for name in self.names.iter() {
-            if !ignored_labels.contains(&name.as_str()) && !other_labels.names.contains(&name) {
+            if !ignored_labels.contains(&name.as_str()) && !other_labels.names.contains(name) {
                 return false;
             }
         }
 
-        return true;
+        true
     }
 }
 
@@ -129,20 +129,11 @@ impl MetricsType for OpenMetricsType {
     }
 
     fn can_have_units(&self) -> bool {
-        match self {
-            OpenMetricsType::Counter | OpenMetricsType::Unknown | OpenMetricsType::Gauge => true,
-            _ => false,
-        }
+        matches!(self, OpenMetricsType::Counter | OpenMetricsType::Unknown | OpenMetricsType::Gauge)
     }
 
     fn can_have_multiple_lines(&self) -> bool {
-        match self {
-            OpenMetricsType::Counter
-            | OpenMetricsType::GaugeHistogram
-            | OpenMetricsType::Histogram
-            | OpenMetricsType::Summary => true,
-            _ => false,
-        }
+        matches!(self, OpenMetricsType::Counter | OpenMetricsType::GaugeHistogram | OpenMetricsType::Histogram | OpenMetricsType::Summary)
     }
 }
 
@@ -169,7 +160,7 @@ impl TryFrom<&str> for OpenMetricsType {
 
 impl Default for OpenMetricsType {
     fn default() -> Self {
-        return OpenMetricsType::Unknown;
+        OpenMetricsType::Unknown
     }
 }
 
@@ -196,11 +187,11 @@ impl MetricMarshal {
         timestamp: Option<Timestamp>,
         value: MetricValueMarshal,
     ) -> MetricMarshal {
-        return MetricMarshal {
+        MetricMarshal {
             label_values,
             timestamp,
             value,
-        };
+        }
     }
 
     fn validate<Type>(&self, family: &MetricFamilyMarshal<Type>) -> Result<(), ParseError>
@@ -208,7 +199,7 @@ impl MetricMarshal {
         Type: fmt::Debug + Clone + Default,
     {
         // All the labels are right
-        if family.label_names.is_none() && self.label_values.len() != 0
+        if family.label_names.is_none() && !self.label_values.is_empty()
             || (family.label_names.as_ref().unwrap().names.len() != self.label_values.len())
         {
             return Err(ParseError::InvalidMetric(format!(
@@ -217,7 +208,7 @@ impl MetricMarshal {
             )));
         }
 
-        if family.unit.is_some() && family.metrics.len() == 0 {
+        if family.unit.is_some() && family.metrics.is_empty() {
             return Err(ParseError::InvalidMetric(
                 "Can't have metric with unit and no samples".to_owned(),
             ));
@@ -226,23 +217,17 @@ impl MetricMarshal {
         match &self.value {
             MetricValueMarshal::Histogram(histogram_value)
             | MetricValueMarshal::GaugeHistogram(histogram_value) => {
-                let gauge_histogram = if let MetricValueMarshal::GaugeHistogram(_) = &self.value {
-                    true
-                } else {
-                    false
-                };
+                let gauge_histogram = matches!(&self.value, MetricValueMarshal::GaugeHistogram(_));
 
-                if histogram_value.buckets.len() == 0 {
+                if histogram_value.buckets.is_empty() {
                     return Err(ParseError::InvalidMetric(
                         "Histograms must have at least one bucket".to_owned(),
                     ));
                 }
 
-                if histogram_value
+                if !histogram_value
                     .buckets
-                    .iter()
-                    .find(|b| b.upper_bound == f64::INFINITY)
-                    .is_none()
+                    .iter().any(|b| b.upper_bound == f64::INFINITY)
                 {
                     return Err(ParseError::InvalidMetric(format!(
                         "Histograms must have a +INF bucket: {:?}",
@@ -252,7 +237,7 @@ impl MetricMarshal {
 
                 let buckets = &histogram_value.buckets;
 
-                let has_negative_bucket = buckets.iter().find(|f| f.upper_bound < 0.).is_some();
+                let has_negative_bucket = buckets.iter().any(|f| f.upper_bound < 0.);
 
                 if has_negative_bucket {
                     if histogram_value.sum.is_some() && !gauge_histogram {
@@ -260,15 +245,13 @@ impl MetricMarshal {
                             "Histograms cannot have a sum with a negative bucket".to_owned(),
                         ));
                     }
-                } else {
-                    if histogram_value.sum.is_some()
-                        && histogram_value.sum.as_ref().unwrap().as_f64() < 0.
-                    {
-                        return Err(ParseError::InvalidMetric(
-                            "Histograms cannot have a negative sum without a negative bucket"
-                                .to_owned(),
-                        ));
-                    }
+                } else if histogram_value.sum.is_some()
+                    && histogram_value.sum.as_ref().unwrap().as_f64() < 0.
+                {
+                    return Err(ParseError::InvalidMetric(
+                        "Histograms cannot have a negative sum without a negative bucket"
+                            .to_owned(),
+                    ));
                 }
 
                 if histogram_value.sum.is_some() && histogram_value.count.is_none() {
@@ -297,7 +280,7 @@ impl MetricMarshal {
             _ => {}
         }
 
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -409,7 +392,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                                     unreachable!();
                                 }
 
-                                return Ok(());
+                                Ok(())
                             },
                         ),
                     ),
@@ -454,7 +437,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                                     unreachable!();
                                 }
 
-                                return Ok(());
+                                Ok(())
                             },
                         ),
                     ),
@@ -483,7 +466,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                                     unreachable!();
                                 }
 
-                                return Ok(());
+                                Ok(())
                             },
                         ),
                     ),
@@ -506,7 +489,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
 
                                     histogram_value.sum = Some(metric_value);
 
-                                    return Ok(());
+                                    Ok(())
                                 } else {
                                     unreachable!();
                                 }
@@ -555,7 +538,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                                     unreachable!();
                                 }
 
-                                return Ok(());
+                                Ok(())
                             },
                         ),
                     ),
@@ -600,7 +583,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                                     unreachable!();
                                 }
 
-                                return Ok(());
+                                Ok(())
                             },
                         ),
                     ),
@@ -623,7 +606,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
 
                                     histogram_value.sum = Some(metric_value);
 
-                                    return Ok(());
+                                    Ok(())
                                 } else {
                                     unreachable!();
                                 }
@@ -665,7 +648,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                                     unreachable!();
                                 }
 
-                                return Ok(());
+                                Ok(())
                             },
                         ),
                     ),
@@ -687,7 +670,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                                     }
 
                                     counter_value.created = Some(metric_value.as_f64());
-                                    return Ok(());
+                                    Ok(())
                                 } else {
                                     unreachable!();
                                 }
@@ -721,7 +704,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                                 unreachable!();
                             }
 
-                            return Ok(());
+                            Ok(())
                         },
                     ),
                 )],
@@ -745,13 +728,11 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                                     return Err(ParseError::DuplicateMetric);
                                 }
 
-                                if existing_metric.label_values.len() == 0 {
-                                    return Err(ParseError::InvalidMetric(format!(
-                                        "Stateset must have labels"
-                                    )));
+                                if existing_metric.label_values.is_empty() {
+                                    return Err(ParseError::InvalidMetric("Stateset must have labels".to_string()));
                                 }
 
-                                if metric_value.as_f64() != 0. && metric_value.as_f64() != 1. {
+                                if metric_value.as_f64() != 0. && (metric_value.as_f64() - 1.).abs() > f64::EPSILON {
                                     return Err(ParseError::InvalidMetric(format!(
                                         "Stateset value must be 0 or 1 (got: {})",
                                         metric_value.as_f64()
@@ -764,7 +745,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                                 unreachable!();
                             }
 
-                            return Ok(());
+                            Ok(())
                         },
                     ),
                 )],
@@ -794,7 +775,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                                 unreachable!();
                             }
 
-                            return Ok(());
+                            Ok(())
                         },
                     ),
                 )],
@@ -831,7 +812,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                                 return Err(ParseError::DuplicateMetric);
                             }
 
-                            return Ok(());
+                            Ok(())
                         },
                     ),
                 )],
@@ -867,7 +848,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                                         )));
                                     };
 
-                                    if let None = summary_value.count {
+                                    if summary_value.count.is_none() {
                                         summary_value.count = Some(metric_value);
                                     } else {
                                         return Err(ParseError::DuplicateMetric);
@@ -876,7 +857,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                                     unreachable!();
                                 }
 
-                                return Ok(());
+                                Ok(())
                             },
                         ),
                     ),
@@ -901,11 +882,11 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                                 if let MetricValueMarshal::Summary(summary_value) =
                                     &mut existing_metric.value
                                 {
-                                    if let None = summary_value.sum {
+                                    if summary_value.sum.is_none() {
                                         summary_value.sum = Some(metric_value);
-                                        return Ok(());
+                                        Ok(())
                                     } else {
-                                        return Err(ParseError::DuplicateMetric);
+                                        Err(ParseError::DuplicateMetric)
                                     }
                                 } else {
                                     unreachable!();
@@ -946,7 +927,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                                     }
                                 };
 
-                                if bucket_bound < 0. || bucket_bound > 1. || bucket_bound.is_nan() {
+                                if !(0. ..=1.).contains(&bucket_bound) || bucket_bound.is_nan() {
                                     return Err(ParseError::InvalidMetric(format!(
                                         "Summary bounds must be between 0 and 1 (got: {})",
                                         bucket_bound
@@ -966,7 +947,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                                     unreachable!();
                                 }
 
-                                return Ok(());
+                                Ok(())
                             },
                         ),
                     ),
@@ -976,8 +957,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
 
         let metric_type = self
             .family_type
-            .as_ref()
-            .map(|s| s.clone())
+            .as_ref().cloned()
             .unwrap_or_default();
 
         if !metric_type.can_have_exemplar(metric_name) && exemplar.is_some() {
@@ -1033,7 +1013,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                         Some(metric) => {
                             match (metric.timestamp.as_ref(), timestamp.as_ref()) {
                                 (Some(metric_timestamp), Some(timestamp)) if timestamp < metric_timestamp => return Err(ParseError::InvalidMetric(format!("Timestamps went backwarts in family - saw {} and then saw{}", metric_timestamp, timestamp))),
-                                (Some(_), None) | (None, Some(_)) => return Err(ParseError::InvalidMetric(format!("Missing timestamp in family (one metric had a timestamp, another didn't)"))),
+                                (Some(_), None) | (None, Some(_)) => return Err(ParseError::InvalidMetric("Missing timestamp in family (one metric had a timestamp, another didn't)".to_string())),
                                 (Some(metric_timestamp), Some(timestamp)) if timestamp >= metric_timestamp && !metric_type.can_have_multiple_lines() => return Ok(()),
                                 _ => (metric, false)
                             }
@@ -1081,14 +1061,14 @@ where
     TypeSet: Default + Clone + fmt::Debug + MetricsType,
 {
     fn empty() -> MetricFamilyMarshal<TypeSet> {
-        return MetricFamilyMarshal::<TypeSet> {
+        MetricFamilyMarshal::<TypeSet> {
             name: None,
             label_names: None,
             family_type: None,
             help: None,
             unit: None,
             metrics: Vec::new(),
-        };
+        }
     }
 
     fn validate(&self) -> Result<(), ParseError> {
@@ -1096,17 +1076,17 @@ where
             metric.validate(self)?;
         }
 
-        return Ok(());
+        Ok(())
     }
 
     fn get_metric_by_labelset_mut(
         &mut self,
-        label_values: &Vec<String>,
+        label_values: &[String],
     ) -> Option<&mut MetricMarshal> {
         return self
             .metrics
             .iter_mut()
-            .find(|m| &m.label_values == label_values);
+            .find(|m| m.label_values == label_values);
     }
 
     pub fn add_metric(&mut self, metric: MetricMarshal) {
@@ -1115,7 +1095,7 @@ where
 
     fn try_set_label_names(
         &mut self,
-        sample_name: &String,
+        sample_name: &str,
         names: LabelNames<TypeSet>,
     ) -> Result<(), ParseError> {
         if self.label_names.is_none() {
@@ -1130,7 +1110,7 @@ where
             ));
         }
 
-        return Ok(());
+        Ok(())
     }
 
     fn set_or_test_name(&mut self, name: String) -> Result<(), ParseError> {
@@ -1144,32 +1124,27 @@ where
         }
 
         self.name = name;
-        return Ok(());
+        Ok(())
     }
 
     fn try_add_help(&mut self, help: String) -> Result<(), ParseError> {
         if self.help.is_some() {
-            return Err(ParseError::InvalidMetric(format!(
-                "Got two help lines in the same metric family"
-            )));
+            return Err(ParseError::InvalidMetric("Got two help lines in the same metric family".to_string()));
         }
 
         self.help = Some(help);
 
-        return Ok(());
+        Ok(())
     }
 
     fn try_add_unit(&mut self, unit: String) -> Result<(), ParseError> {
         if self.unit.is_some() {
-            return Err(ParseError::InvalidMetric(format!(
-                "Got two unit lines in the same metric family"
-            )));
+            return Err(ParseError::InvalidMetric("Got two unit lines in the same metric family".to_string()));
         }
 
         if !self
             .family_type
-            .as_ref()
-            .map(|s| s.clone())
+            .as_ref().cloned()
             .unwrap_or_default()
             .can_have_units()
         {
@@ -1181,19 +1156,17 @@ where
 
         self.unit = Some(unit);
 
-        return Ok(());
+        Ok(())
     }
 
     fn try_add_type(&mut self, family_type: TypeSet) -> Result<(), ParseError> {
         if self.family_type.is_some() {
-            return Err(ParseError::InvalidMetric(format!(
-                "Got two type lines in the same metric family"
-            )));
+            return Err(ParseError::InvalidMetric("Got two type lines in the same metric family".to_string()));
         }
 
         self.family_type = Some(family_type);
 
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -1204,17 +1177,16 @@ where
     fn from(marshal: MetricFamilyMarshal<TypeSet>) -> Self {
         assert!(marshal.name.is_some());
 
-        return MetricFamily {
+        MetricFamily {
             name: marshal.name.unwrap(),
             label_names: marshal
                 .label_names
-                .map(|names| names.names)
-                .unwrap_or(Vec::new()),
+                .map(|names| names.names).unwrap_or_default(),
             family_type: marshal.family_type.unwrap_or_default(),
             help: marshal.help,
             unit: marshal.unit,
             metrics: marshal.metrics.into_iter().map(|m| m.into()).collect(),
-        };
+        }
     }
 }
 
@@ -1227,7 +1199,7 @@ pub enum ParseError {
 
 impl From<pest::error::Error<Rule>> for ParseError {
     fn from(err: pest::error::Error<Rule>) -> Self {
-        return ParseError::ParseError(err);
+        ParseError::ParseError(err)
     }
 }
 
@@ -1279,7 +1251,7 @@ pub fn parse_openmetrics(
             _ => unreachable!(),
         }
 
-        return Ok(());
+        Ok(())
     }
 
     fn parse_exemplar(pair: Pair<Rule>) -> Result<Exemplar, ParseError> {
@@ -1317,7 +1289,7 @@ pub fn parse_openmetrics(
             None => None,
         };
 
-        return Ok(Exemplar::new(labels, id, timestamp));
+        Ok(Exemplar::new(labels, id, timestamp))
     }
 
     fn parse_labels(pair: Pair<Rule>) -> Result<Vec<(&str, &str)>, ParseError> {
@@ -1331,7 +1303,7 @@ pub fn parse_openmetrics(
             let name = label.next().unwrap().as_str();
             let value = label.next().unwrap().as_str();
 
-            if labels.iter().find(|(n, _)| n == &name).is_some() {
+            if labels.iter().any(|(n, _)| n == &name) {
                 return Err(ParseError::InvalidMetric(format!(
                     "Found label `{}` twice in the same labelset",
                     name
@@ -1343,7 +1315,7 @@ pub fn parse_openmetrics(
 
         labels.sort_by_key(|l| l.0);
 
-        return Ok(labels);
+        Ok(labels)
     }
 
     fn parse_sample(
@@ -1410,7 +1382,7 @@ pub fn parse_openmetrics(
             exemplar,
         )?;
 
-        return Ok(());
+        Ok(())
     }
 
     fn parse_metric_family(
@@ -1423,7 +1395,7 @@ pub fn parse_openmetrics(
         for child in pair.into_inner() {
             match child.as_rule() {
                 Rule::metricdescriptor => {
-                    if metric_family.metrics.len() == 0 {
+                    if metric_family.metrics.is_empty() {
                         parse_metric_descriptor(child, &mut metric_family)?;
                     } else {
                         return Err(ParseError::InvalidMetric(
@@ -1440,7 +1412,7 @@ pub fn parse_openmetrics(
 
         metric_family.validate()?;
 
-        return Ok(metric_family.into());
+        Ok(metric_family.into())
     }
 
     let exposition_marshal = OpenMetricsParser::parse(Rule::exposition, exposition_bytes)?
@@ -1470,11 +1442,9 @@ pub fn parse_openmetrics(
 
                 if span.as_span().end() != exposition_bytes.len()
                     && !(span.as_span().end() == exposition_bytes.len() - 1
-                        && exposition_bytes.chars().last() == Some('\n'))
+                        && exposition_bytes.ends_with('\n'))
                 {
-                    return Err(ParseError::InvalidMetric(format!(
-                        "Found text after the EOF token"
-                    )));
+                    return Err(ParseError::InvalidMetric("Found text after the EOF token".to_string()));
                 }
             }
             _ => unreachable!(),
@@ -1482,10 +1452,8 @@ pub fn parse_openmetrics(
     }
 
     if !found_eof {
-        return Err(ParseError::InvalidMetric(format!(
-            "Didn't find an EOF token"
-        )));
+        return Err(ParseError::InvalidMetric("Didn't find an EOF token".to_string()));
     }
 
-    return Ok(exposition);
+    Ok(exposition)
 }

@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use std::{fs, path::PathBuf};
+use std::{fs, path::{Path, PathBuf}};
 
 #[derive(Deserialize, Debug)]
 struct TestMeta {
@@ -10,7 +10,7 @@ struct TestMeta {
     should_parse: bool,
 }
 
-fn read_child_file(parent: &PathBuf, filename: &str) -> String {
+fn read_child_file(parent: &Path, filename: &str) -> String {
     let mut child_path = PathBuf::new();
     child_path.push(parent);
     child_path.push(filename);

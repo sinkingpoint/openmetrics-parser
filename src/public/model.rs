@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap};
 
 pub type Timestamp = f64;
 
@@ -9,7 +9,7 @@ pub struct Exemplar {
     pub id: f64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct MetricFamily<TypeSet, ValueType> {
     pub name: String,
     pub label_names: Vec<String>,
@@ -24,21 +24,27 @@ pub struct MetricsExposition<TypeSet, ValueType> {
     pub families: HashMap<String, MetricFamily<TypeSet, ValueType>>,
 }
 
+impl<TypeSet, ValueType> Default for MetricsExposition<TypeSet, ValueType> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<TypeSet, ValueType> MetricsExposition<TypeSet, ValueType> {
     pub fn new() -> MetricsExposition<TypeSet, ValueType> {
-        return MetricsExposition {
-            families: HashMap::new(),
-        };
+        MetricsExposition {
+            families: HashMap::new()
+        }
     }
 }
 
 impl Exemplar {
     pub fn new(labels: HashMap<String, String>, id: f64, timestamp: Option<f64>) -> Exemplar {
-        return Exemplar {
+        Exemplar {
             labels,
             id,
             timestamp,
-        };
+        }
     }
 }
 
@@ -150,7 +156,7 @@ impl MetricNumber {
     pub fn as_i64(&self) -> Option<i64> {
         match self {
             MetricNumber::Int(i) => Some(*i),
-            MetricNumber::Float(f) if f.round() == *f => Some(*f as i64),
+            MetricNumber::Float(f) if(f.round() - *f).abs() < f64::EPSILON => Some(*f as i64),
             _ => None,
         }
     }
