@@ -51,7 +51,6 @@ impl MetricProcesser {
     }
 }
 
-
 impl MarshalledMetricFamily for MetricFamilyMarshal {
     type Error = ParseError;
 
@@ -86,9 +85,10 @@ impl MarshalledMetricFamily for MetricFamilyMarshal {
                                     match bound.parse() {
                                         Ok(f) => f,
                                         Err(_) => {
-                                            return Err(ParseError::InvalidMetric(
-                                                format!("Invalid histogram bound: {}", bound),
-                                            ));
+                                            return Err(ParseError::InvalidMetric(format!(
+                                                "Invalid histogram bound: {}",
+                                                bound
+                                            )));
                                         }
                                     }
                                 };
@@ -126,12 +126,10 @@ impl MarshalledMetricFamily for MetricFamilyMarshal {
                                 {
                                     let metric_value = if let Some(value) = metric_value.as_i64() {
                                         if value < 0 {
-                                            return Err(ParseError::InvalidMetric(
-                                                format!(
-                                                    "Histogram counts must be positive (got: {})",
-                                                    value
-                                                ),
-                                            ));
+                                            return Err(ParseError::InvalidMetric(format!(
+                                                "Histogram counts must be positive (got: {})",
+                                                value
+                                            )));
                                         }
 
                                         value as u64
@@ -217,42 +215,40 @@ impl MarshalledMetricFamily for MetricFamilyMarshal {
             ),
             (
                 vec![PrometheusType::Counter],
-                vec![
-                    (
-                        "",
-                        vec![],
-                        MetricProcesser::new(
-                            |existing_metric: &mut MetricMarshal,
-                             metric_value: MetricNumber,
-                             _: Vec<String>,
-                             _: Vec<String>,
-                             _: Option<Exemplar>,
-                             _: bool| {
-                                if let MetricValueMarshal::Counter(counter_value) =
-                                    &mut existing_metric.value
-                                {
-                                    if counter_value.value.is_some() {
-                                        return Err(ParseError::DuplicateMetric);
-                                    }
-
-                                    let value = metric_value.as_f64();
-                                    if value < 0. || value.is_nan() {
-                                        return Err(ParseError::InvalidMetric(format!(
-                                            "Counter totals must be non negative (got: {})",
-                                            metric_value.as_f64()
-                                        )));
-                                    }
-
-                                    counter_value.value = Some(metric_value);
-                                } else {
-                                    unreachable!();
+                vec![(
+                    "",
+                    vec![],
+                    MetricProcesser::new(
+                        |existing_metric: &mut MetricMarshal,
+                         metric_value: MetricNumber,
+                         _: Vec<String>,
+                         _: Vec<String>,
+                         _: Option<Exemplar>,
+                         _: bool| {
+                            if let MetricValueMarshal::Counter(counter_value) =
+                                &mut existing_metric.value
+                            {
+                                if counter_value.value.is_some() {
+                                    return Err(ParseError::DuplicateMetric);
                                 }
 
-                                return Ok(());
-                            },
-                        ),
+                                let value = metric_value.as_f64();
+                                if value < 0. || value.is_nan() {
+                                    return Err(ParseError::InvalidMetric(format!(
+                                        "Counter totals must be non negative (got: {})",
+                                        metric_value.as_f64()
+                                    )));
+                                }
+
+                                counter_value.value = Some(metric_value);
+                            } else {
+                                unreachable!();
+                            }
+
+                            return Ok(());
+                        },
                     ),
-                ],
+                )],
             ),
             (
                 vec![PrometheusType::Gauge],
@@ -332,12 +328,10 @@ impl MarshalledMetricFamily for MetricFamilyMarshal {
                                 {
                                     let metric_value = if let Some(value) = metric_value.as_i64() {
                                         if value < 0 {
-                                            return Err(ParseError::InvalidMetric(
-                                                format!(
-                                                    "Summary counts must be positive (got: {})",
-                                                    value
-                                                ),
-                                            ));
+                                            return Err(ParseError::InvalidMetric(format!(
+                                                "Summary counts must be positive (got: {})",
+                                                value
+                                            )));
                                         }
                                         value as u64
                                     } else {
@@ -418,12 +412,10 @@ impl MarshalledMetricFamily for MetricFamilyMarshal {
                                     match bound.parse() {
                                         Ok(f) => f,
                                         Err(_) => {
-                                            return Err(ParseError::InvalidMetric(
-                                                format!(
-                                                    "Summary bounds must be numbers (got: {})",
-                                                    bound
-                                                ),
-                                            ));
+                                            return Err(ParseError::InvalidMetric(format!(
+                                                "Summary bounds must be numbers (got: {})",
+                                                bound
+                                            )));
                                         }
                                     }
                                 };
@@ -602,8 +594,7 @@ struct LabelNames {
     metric_type: PrometheusType,
 }
 
-impl LabelNames
-{
+impl LabelNames {
     fn new(sample_name: &String, metric_type: PrometheusType, labels: Vec<String>) -> LabelNames {
         let ignored_labels = PrometheusType::get_ignored_labels(&metric_type, sample_name);
         let names = labels
@@ -656,11 +647,7 @@ impl MetricMarshal {
         };
     }
 
-    fn validate(
-        &self,
-        family: &MetricFamilyMarshal,
-    ) -> Result<(), ParseError>
-    {
+    fn validate(&self, family: &MetricFamilyMarshal) -> Result<(), ParseError> {
         // All the labels are right
         if family.label_names.is_none() && self.label_values.len() != 0
             || (family.label_names.as_ref().unwrap().names.len() != self.label_values.len())
@@ -708,7 +695,9 @@ impl MetricMarshal {
                         ));
                     }
                 } else {
-                    if histogram_value.sum.is_some() && histogram_value.sum.as_ref().unwrap().as_f64() < 0. {
+                    if histogram_value.sum.is_some()
+                        && histogram_value.sum.as_ref().unwrap().as_f64() < 0.
+                    {
                         return Err(ParseError::InvalidMetric(
                             "Histograms cannot have a negative sum without a negative bucket"
                                 .to_owned(),
@@ -753,8 +742,7 @@ pub enum ParseError {
     InvalidMetric(String),
 }
 
-impl MetricFamilyMarshal
-{
+impl MetricFamilyMarshal {
     fn empty() -> MetricFamilyMarshal {
         return MetricFamilyMarshal {
             name: None,
@@ -800,9 +788,10 @@ impl MetricFamilyMarshal
 
         let old_names = self.label_names.as_ref().unwrap();
         if !old_names.matches(sample_name, &names) {
-            return Err(ParseError::InvalidMetric(
-                format!("Labels in metrics have different label sets ({:?} vs ({:?})", names, old_names)
-            ));
+            return Err(ParseError::InvalidMetric(format!(
+                "Labels in metrics have different label sets ({:?} vs ({:?})",
+                names, old_names
+            )));
         }
 
         return Ok(());
@@ -867,9 +856,7 @@ impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ParseError::ParseError(e) => e.fmt(f),
-            ParseError::DuplicateMetric => {
-                f.write_str("Found two metrics with the same labelset")
-            }
+            ParseError::DuplicateMetric => f.write_str("Found two metrics with the same labelset"),
             ParseError::InvalidMetric(s) => f.write_str(s),
         }
     }
@@ -882,7 +869,7 @@ impl From<MetricValueMarshal> for PrometheusValue {
             MetricValueMarshal::Gauge(g) => PrometheusValue::Gauge(g.unwrap()),
             MetricValueMarshal::Counter(c) => PrometheusValue::Counter(c.into()),
             MetricValueMarshal::Histogram(h) => PrometheusValue::Histogram(h),
-            MetricValueMarshal::Summary(s) => PrometheusValue::Summary(s)
+            MetricValueMarshal::Summary(s) => PrometheusValue::Summary(s),
         }
     }
 }
@@ -890,11 +877,7 @@ impl From<MetricValueMarshal> for PrometheusValue {
 impl MetricsType for PrometheusType {
     fn get_ignored_labels(&self, metric_name: &str) -> &[&str] {
         match self {
-            PrometheusType::Histogram 
-                if metric_name.ends_with("_bucket") =>
-            {
-                &["le"]
-            }
+            PrometheusType::Histogram if metric_name.ends_with("_bucket") => &["le"],
             _ => &[],
         }
     }
@@ -905,25 +888,21 @@ impl MetricsType for PrometheusType {
             PrometheusType::Counter => MetricValueMarshal::Counter(CounterValueMarshal::default()),
             PrometheusType::Unknown => MetricValueMarshal::Unknown(None),
             PrometheusType::Gauge => MetricValueMarshal::Gauge(None),
-            PrometheusType::Summary => MetricValueMarshal::Summary(SummaryValue::default())
+            PrometheusType::Summary => MetricValueMarshal::Summary(SummaryValue::default()),
         }
     }
 
     fn can_have_multiple_lines(&self) -> bool {
         match self {
-            PrometheusType::Counter
-            | PrometheusType::Histogram
-            | PrometheusType::Summary => true,
+            PrometheusType::Counter | PrometheusType::Histogram | PrometheusType::Summary => true,
             _ => false,
         }
     }
-    
+
     fn can_have_exemplar(&self, metric_name: &str) -> bool {
         match self {
             PrometheusType::Counter => metric_name.ends_with("_total"),
-            PrometheusType::Histogram => {
-                metric_name.ends_with("_bucket")
-            }
+            PrometheusType::Histogram => metric_name.ends_with("_bucket"),
             _ => false,
         }
     }
@@ -1061,10 +1040,7 @@ pub fn parse_prometheus(
         return Ok(labels);
     }
 
-    fn parse_sample(
-        pair: Pair<Rule>,
-        family: &mut MetricFamilyMarshal,
-    ) -> Result<(), ParseError> {
+    fn parse_sample(pair: Pair<Rule>, family: &mut MetricFamilyMarshal) -> Result<(), ParseError> {
         assert_eq!(pair.as_rule(), Rule::metric);
 
         let mut descriptor = pair.into_inner();
@@ -1178,7 +1154,7 @@ pub fn parse_prometheus(
                 }
 
                 exposition.families.insert(family.name.clone(), family);
-            },
+            }
             Rule::EOI => {}
             _ => unreachable!(),
         }

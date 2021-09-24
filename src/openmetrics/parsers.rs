@@ -203,10 +203,7 @@ impl MetricMarshal {
         };
     }
 
-    fn validate<Type>(
-        &self,
-        family: &MetricFamilyMarshal<Type>,
-    ) -> Result<(), ParseError>
+    fn validate<Type>(&self, family: &MetricFamilyMarshal<Type>) -> Result<(), ParseError>
     where
         Type: fmt::Debug + Clone + Default,
     {
@@ -390,9 +387,10 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                                     match bound.parse() {
                                         Ok(f) => f,
                                         Err(_) => {
-                                            return Err(ParseError::InvalidMetric(
-                                                format!("Invalid histogram bound: {}", bound),
-                                            ));
+                                            return Err(ParseError::InvalidMetric(format!(
+                                                "Invalid histogram bound: {}",
+                                                bound
+                                            )));
                                         }
                                     }
                                 };
@@ -430,12 +428,10 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                                 {
                                     let metric_value = if let Some(value) = metric_value.as_i64() {
                                         if value < 0 {
-                                            return Err(ParseError::InvalidMetric(
-                                                format!(
-                                                    "Histogram counts must be positive (got: {})",
-                                                    value
-                                                ),
-                                            ));
+                                            return Err(ParseError::InvalidMetric(format!(
+                                                "Histogram counts must be positive (got: {})",
+                                                value
+                                            )));
                                         }
 
                                         value as u64
@@ -578,12 +574,10 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                                 {
                                     let metric_value = if let Some(value) = metric_value.as_i64() {
                                         if value < 0 {
-                                            return Err(ParseError::InvalidMetric(
-                                                format!(
-                                                    "Histogram counts must be positive (got: {})",
-                                                    value
-                                                ),
-                                            ));
+                                            return Err(ParseError::InvalidMetric(format!(
+                                                "Histogram counts must be positive (got: {})",
+                                                value
+                                            )));
                                         }
 
                                         value as u64
@@ -860,12 +854,10 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                                 {
                                     let metric_value = if let Some(value) = metric_value.as_i64() {
                                         if value < 0 {
-                                            return Err(ParseError::InvalidMetric(
-                                                format!(
-                                                    "Summary counts must be positive (got: {})",
-                                                    value
-                                                ),
-                                            ));
+                                            return Err(ParseError::InvalidMetric(format!(
+                                                "Summary counts must be positive (got: {})",
+                                                value
+                                            )));
                                         }
                                         value as u64
                                     } else {
@@ -946,12 +938,10 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                                     match bound.parse() {
                                         Ok(f) => f,
                                         Err(_) => {
-                                            return Err(ParseError::InvalidMetric(
-                                                format!(
-                                                    "Summary bounds must be numbers (got: {})",
-                                                    bound
-                                                ),
-                                            ));
+                                            return Err(ParseError::InvalidMetric(format!(
+                                                "Summary bounds must be numbers (got: {})",
+                                                bound
+                                            )));
                                         }
                                     }
                                 };
@@ -1245,9 +1235,7 @@ impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ParseError::ParseError(e) => e.fmt(f),
-            ParseError::DuplicateMetric => {
-                f.write_str("Found two metrics with the same labelset")
-            }
+            ParseError::DuplicateMetric => f.write_str("Found two metrics with the same labelset"),
             ParseError::InvalidMetric(s) => f.write_str(s),
         }
     }
@@ -1286,11 +1274,6 @@ pub fn parse_openmetrics(
                         "UNIT metric name doesn't match family".to_owned(),
                     ));
                 }
-                let ty = family
-                    .family_type
-                    .as_ref()
-                    .map(|t| t.clone())
-                    .unwrap_or_default();
                 family.try_add_unit(unit.to_string())?;
             }
             _ => unreachable!(),
