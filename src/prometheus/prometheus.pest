@@ -1,0 +1,43 @@
+hash = _{ "#" }
+sp = _{ " " }
+bs = _{ "\\" }
+dquote = _{ "\"" }
+sign = _{ "+" | "-" }
+comma = _{ "," }
+eq = _{ "=" }
+kw_help = { "HELP" }
+kw_type = { "TYPE" }
+kw_counter = { "counter" }
+kw_gauge = { "gauge" }
+kw_histogram = { "histogram" }
+kw_summary = { "summary" }
+commentchar = _{ !NEWLINE ~ ANY }
+metrictype = { kw_counter | kw_gauge | kw_histogram | kw_summary }
+COMMENT = _{ hash ~ sp ~ !(kw_help | kw_type) ~ commentchar+ ~ NEWLINE }
+
+exposition = { SOI ~ metricset ~ NEWLINE? ~ EOI }
+metricset = _{ (metricfamily ~ NEWLINE*)+ }
+metricfamily = { (metricdescriptor* ~ metric+) | (metricdescriptor+ ~ metric*) }
+
+metricdescriptor = ${
+    hash ~ sp ~ kw_help ~ sp ~ metricname ~ sp ~ escapedstring ~ NEWLINE |
+    hash ~ sp ~ kw_type ~ sp ~ metricname ~ sp ~ metrictype ~ NEWLINE
+}
+exemplar = ${ sp ~ hash ~ sp ~ labels ~ sp ~ number ~ (sp ~ timestamp)? }
+metric = ${ metricname ~ labels? ~ sp+ ~ number ~ (sp ~ timestamp)? ~ exemplar? ~ NEWLINE }
+
+labels = { "{" ~ (label ~ (comma ~ label)*)? ~ "}" }
+label = { labelname ~ eq ~ dquote ~ escapedstring ~ dquote }
+labelname = @{ labelname_initialchar ~ labelname_char* }
+labelname_char = _{ labelname_initialchar | ASCII_DIGIT }
+labelname_initialchar = _{ ASCII_ALPHA | "_" }
+
+metricname = {ASCII_ALPHA_LOWER ~ metricnamechar* }
+metricnamechar = _{ ASCII_ALPHA_LOWER | ASCII_DIGIT | "_" }
+
+number = @{ realnumber | sign ~ (^"inf" | ^"infinity") | ^"nan" }
+timestamp = @{ realnumber }
+realnumber = @{ sign? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)? ~ ("e" ~ sign? ~ ASCII_DIGIT+)? | sign? ~ ASCII_DIGIT+ }
+escapedstring = { escapedchar* }
+escapedchar = _{ normalchar | bs ~ (bs | "n" | dquote)}
+normalchar = _{ !(bs | NEWLINE | dquote) ~ ANY }

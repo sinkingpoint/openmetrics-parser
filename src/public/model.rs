@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt};
 
 pub type Timestamp = f64;
 
@@ -105,6 +105,24 @@ pub enum OpenMetricsValue {
     StateSet(MetricNumber),
     GaugeHistogram(HistogramValue),
     Info,
+    Summary(SummaryValue),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum PrometheusType {
+    Counter,
+    Gauge,
+    Histogram,
+    Summary,
+    Unknown,
+}
+
+#[derive(Debug)]
+pub enum PrometheusValue {
+    Unknown(MetricNumber),
+    Gauge(MetricNumber),
+    Counter(CounterValue),
+    Histogram(HistogramValue),
     Summary(SummaryValue),
 }
 
