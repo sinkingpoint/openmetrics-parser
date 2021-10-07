@@ -194,9 +194,7 @@ impl MetricMarshal {
         }
     }
 
-    fn validate<Type>(&self, family: &MetricFamilyMarshal<Type>) -> Result<(), ParseError>
-    where
-        Type: fmt::Debug + Clone + Default,
+    fn validate(&self, family: &MetricFamilyMarshal<OpenMetricsType>) -> Result<(), ParseError>
     {
         // All the labels are right
         if family.label_names.is_none() && !self.label_values.is_empty()
@@ -254,17 +252,17 @@ impl MetricMarshal {
                     ));
                 }
 
-                if histogram_value.sum.is_some() && histogram_value.count.is_none() {
-                    return Err(ParseError::InvalidMetric(
-                        "Count must be present if sum is present".to_owned(),
-                    ));
-                }
+                // if histogram_value.sum.is_some() && histogram_value.count.is_none() {
+                //     return Err(ParseError::InvalidMetric(
+                //         "Count must be present if sum is present".to_owned(),
+                //     ));
+                // }
 
-                if histogram_value.sum.is_none() && histogram_value.count.is_some() {
-                    return Err(ParseError::InvalidMetric(
-                        "Sum must be present if count is present".to_owned(),
-                    ));
-                }
+                // if histogram_value.sum.is_none() && histogram_value.count.is_some() {
+                //     return Err(ParseError::InvalidMetric(
+                //         "Sum must be present if count is present".to_owned(),
+                //     ));
+                // }
 
                 let mut last = f64::NEG_INFINITY;
                 for bucket in buckets {
@@ -275,6 +273,11 @@ impl MetricMarshal {
                     }
 
                     last = bucket.count.as_f64();
+                }
+            },
+            MetricValueMarshal::Counter(counter_value) => {
+                if counter_value.value.is_none() {
+                    return Err(ParseError::InvalidMetric(format!("Counter is missing a _total")));
                 }
             }
             _ => {}
@@ -874,7 +877,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                                 let value = metric_value.as_f64();
                                 if value < 0. || value.is_nan() {
                                     return Err(ParseError::InvalidMetric(format!(
-                                        "Counter totals must be non negative (got: {})",
+                                        "Summary sums must be non negative (got: {})",
                                         metric_value.as_f64()
                                     )));
                                 }
@@ -1056,12 +1059,10 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
     }
 }
 
-impl<TypeSet> MetricFamilyMarshal<TypeSet>
-where
-    TypeSet: Default + Clone + fmt::Debug + MetricsType,
+impl MetricFamilyMarshal<OpenMetricsType>
 {
-    fn empty() -> MetricFamilyMarshal<TypeSet> {
-        MetricFamilyMarshal::<TypeSet> {
+    fn empty() -> MetricFamilyMarshal<OpenMetricsType> {
+        MetricFamilyMarshal::<OpenMetricsType> {
             name: None,
             label_names: None,
             family_type: None,
@@ -1072,6 +1073,25 @@ where
     }
 
     fn validate(&self) -> Result<(), ParseError> {
+        if self.name.is_none() {
+            return Err(ParseError::InvalidMetric(format!("Metric didn't have a name")));
+        }
+
+        // https://github.com/OpenObservability/OpenMetrics/issues/228
+        // if self.help.is_none() {
+        //     return Err(ParseError::InvalidMetric(format!("Metric {} didn't have a help string", self.name.as_ref().unwrap())));
+        // }
+
+        // if self.unit.is_none() {
+        //     return Err(ParseError::InvalidMetric(format!("Metric {} didn't have a unit string", self.name.as_ref().unwrap())));
+        // }
+
+        if self.family_type == Some(OpenMetricsType::StateSet) {
+            if self.label_names.is_some() && !self.label_names.as_ref().unwrap().names.contains(self.name.as_ref().unwrap()) {
+                return Err(ParseError::InvalidMetric(format!("Stateset must not have a label with the same name as its MetricFamily")));
+            }
+        }
+
         for metric in self.metrics.iter() {
             metric.validate(self)?;
         }
@@ -1096,7 +1116,7 @@ where
     fn try_set_label_names(
         &mut self,
         sample_name: &str,
-        names: LabelNames<TypeSet>,
+        names: LabelNames<OpenMetricsType>,
     ) -> Result<(), ParseError> {
         if self.label_names.is_none() {
             self.label_names = Some(names);
@@ -1138,6 +1158,10 @@ where
     }
 
     fn try_add_unit(&mut self, unit: String) -> Result<(), ParseError> {
+        if unit == "" {
+            return Ok(());
+        }
+
         if self.unit.is_some() {
             return Err(ParseError::InvalidMetric("Got two unit lines in the same metric family".to_string()));
         }
@@ -1159,7 +1183,7 @@ where
         Ok(())
     }
 
-    fn try_add_type(&mut self, family_type: TypeSet) -> Result<(), ParseError> {
+    fn try_add_type(&mut self, family_type: OpenMetricsType) -> Result<(), ParseError> {
         if self.family_type.is_some() {
             return Err(ParseError::InvalidMetric("Got two type lines in the same metric family".to_string()));
         }
@@ -1183,8 +1207,8 @@ where
                 .label_names
                 .map(|names| names.names).unwrap_or_default(),
             family_type: marshal.family_type.unwrap_or_default(),
-            help: marshal.help,
-            unit: marshal.unit,
+            help: marshal.help.unwrap_or_default(),
+            unit: marshal.unit.unwrap_or_default(),
             metrics: marshal.metrics.into_iter().map(|m| m.into()).collect(),
         }
     }
@@ -1230,7 +1254,7 @@ pub fn parse_openmetrics(
 
         match descriptor_type.as_rule() {
             Rule::kw_help => {
-                let help_text = descriptor.next().unwrap().as_str();
+                let help_text = descriptor.next().map(|s| s.as_str()).unwrap_or_default();
                 family.set_or_test_name(metric_name)?;
                 family.try_add_help(help_text.to_string())?;
             }
@@ -1240,7 +1264,7 @@ pub fn parse_openmetrics(
                 family.try_add_type(OpenMetricsType::try_from(family_type)?)?;
             }
             Rule::kw_unit => {
-                let unit = descriptor.next().unwrap().as_str();
+                let unit = descriptor.next().map(|s| s.as_str()).unwrap_or_default();
                 if family.name.is_none() || &metric_name != family.name.as_ref().unwrap() {
                     return Err(ParseError::InvalidMetric(
                         "UNIT metric name doesn't match family".to_owned(),

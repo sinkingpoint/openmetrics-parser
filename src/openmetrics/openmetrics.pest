@@ -27,7 +27,7 @@ metricfamily = ${ (metricdescriptor* ~ metric+) | (metricdescriptor+ ~ metric*) 
 metricdescriptor = ${
                      (hash ~ sp ~ kw_type ~ sp ~ metricname ~ sp ~ metrictype ~ NEWLINE) | 
                      (hash ~ sp ~ kw_help ~ sp ~ metricname ~ sp ~ helpstring ~ NEWLINE) | 
-                     (hash ~ sp ~ kw_unit ~ sp ~ metricname ~ sp ~ metricunit ~ NEWLINE)
+                     (hash ~ sp ~ kw_unit ~ sp ~ metricname ~ (sp ~ metricunit)? ~ NEWLINE)
                    }
 
 metric = _{ sample+ }

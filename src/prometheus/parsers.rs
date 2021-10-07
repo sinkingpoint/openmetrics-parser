@@ -903,8 +903,8 @@ impl From<MetricFamilyMarshal> for MetricFamily<PrometheusType, PrometheusValue>
                 .label_names
                 .map(|names| names.names).unwrap_or_default(),
             family_type: marshal.family_type.unwrap_or_default(),
-            help: marshal.help,
-            unit: marshal.unit,
+            help: marshal.help.unwrap_or_default(),
+            unit: marshal.unit.unwrap_or_default(),
             metrics: marshal.metrics.into_iter().map(|m| m.into()).collect(),
         }
     }
