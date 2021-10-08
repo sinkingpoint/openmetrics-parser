@@ -236,7 +236,7 @@ pub struct Sample<ValueType> {
     pub value: ValueType,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum MetricNumber {
     Float(f64),
     Int(i64),
