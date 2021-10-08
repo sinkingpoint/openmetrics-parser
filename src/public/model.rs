@@ -104,7 +104,7 @@ pub struct SummaryValue {
     pub quantiles: Vec<Quantile>,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum OpenMetricsType {
     /// A Counter that only goes up
     /// Counters measure discrete events. Common examples are the number of HTTP requests received,
@@ -256,6 +256,38 @@ impl MetricNumber {
             MetricNumber::Float(f) if (f.round() - *f).abs() < f64::EPSILON => Some(*f as i64),
             _ => None,
         }
+    }
+}
+
+impl ops::Add for MetricNumber {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        &self + &rhs
+    }
+}
+
+impl ops::Sub for MetricNumber {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        &self - &rhs
+    }
+}
+
+impl ops::Mul for MetricNumber {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        &self * &rhs
+    }
+}
+
+impl ops::Div for MetricNumber {
+    type Output = Self;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        &self / &rhs
     }
 }
 
