@@ -1,5 +1,7 @@
 use std::{collections::HashMap, fmt, ops};
 
+use auto_ops::impl_op_ex;
+
 
 
 pub type Timestamp = f64;
@@ -259,89 +261,41 @@ impl MetricNumber {
     }
 }
 
-impl ops::Add for MetricNumber {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        &self + &rhs
+impl_op_ex!(+ |a: &MetricNumber, b: &MetricNumber| -> MetricNumber { 
+    match (a, b) {
+        (MetricNumber::Float(f), MetricNumber::Float(f2)) => MetricNumber::Float(f + f2),
+        (MetricNumber::Float(f), MetricNumber::Int(i)) => MetricNumber::Float(f + *i as f64),
+        (MetricNumber::Int(i), MetricNumber::Float(f)) => MetricNumber::Float(f + *i as f64),
+        (MetricNumber::Int(i), MetricNumber::Int(i2)) => MetricNumber::Int(i + i2),
     }
-}
+});
 
-impl ops::Sub for MetricNumber {
-    type Output = Self;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        &self - &rhs
+impl_op_ex!(- |a: &MetricNumber, b: &MetricNumber| -> MetricNumber { 
+    match (a, b) {
+        (MetricNumber::Float(f), MetricNumber::Float(f2)) => MetricNumber::Float(f - f2),
+        (MetricNumber::Float(f), MetricNumber::Int(i)) => MetricNumber::Float(f - *i as f64),
+        (MetricNumber::Int(i), MetricNumber::Float(f)) => MetricNumber::Float(f - *i as f64),
+        (MetricNumber::Int(i), MetricNumber::Int(i2)) => MetricNumber::Int(i - i2),
     }
-}
+});
 
-impl ops::Mul for MetricNumber {
-    type Output = Self;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        &self * &rhs
+impl_op_ex!(* |a: &MetricNumber, b: &MetricNumber| -> MetricNumber { 
+    match (a, b) {
+        (MetricNumber::Float(f), MetricNumber::Float(f2)) => MetricNumber::Float(f * f2),
+        (MetricNumber::Float(f), MetricNumber::Int(i)) => MetricNumber::Float(f * *i as f64),
+        (MetricNumber::Int(i), MetricNumber::Float(f)) => MetricNumber::Float(f * *i as f64),
+        (MetricNumber::Int(i), MetricNumber::Int(i2)) => MetricNumber::Int(i * i2),
     }
-}
+});
 
-impl ops::Div for MetricNumber {
-    type Output = Self;
-
-    fn div(self, rhs: Self) -> Self::Output {
-        &self / &rhs
+impl_op_ex!(/ |a: &MetricNumber, b: &MetricNumber| -> MetricNumber { 
+    match (a, b) {
+        (MetricNumber::Float(f), MetricNumber::Float(f2)) => MetricNumber::Float(f / f2),
+        (MetricNumber::Float(f), MetricNumber::Int(i)) => MetricNumber::Float(f / *i as f64),
+        (MetricNumber::Int(i), MetricNumber::Float(f)) => MetricNumber::Float(f / *i as f64),
+        (MetricNumber::Int(i), MetricNumber::Int(i2)) => MetricNumber::Int(i / i2),
     }
-}
-
-impl ops::Add for &MetricNumber {
-    type Output = MetricNumber;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        match (self, rhs) {
-            (MetricNumber::Float(f), MetricNumber::Float(f2)) => MetricNumber::Float(f + f2),
-            (MetricNumber::Float(f), MetricNumber::Int(i)) => MetricNumber::Float(f + *i as f64),
-            (MetricNumber::Int(i), MetricNumber::Float(f)) => MetricNumber::Float(f + *i as f64),
-            (MetricNumber::Int(i), MetricNumber::Int(i2)) => MetricNumber::Int(i + i2),
-        }
-    }
-}
-
-impl ops::Sub for &MetricNumber {
-    type Output = MetricNumber;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        match (self, rhs) {
-            (MetricNumber::Float(f), MetricNumber::Float(f2)) => MetricNumber::Float(f - f2),
-            (MetricNumber::Float(f), MetricNumber::Int(i)) => MetricNumber::Float(f - *i as f64),
-            (MetricNumber::Int(i), MetricNumber::Float(f)) => MetricNumber::Float(f - *i as f64),
-            (MetricNumber::Int(i), MetricNumber::Int(i2)) => MetricNumber::Int(i - i2),
-        }
-    }
-}
-
-impl ops::Mul for &MetricNumber {
-    type Output = MetricNumber;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        match (self, rhs) {
-            (MetricNumber::Float(f), MetricNumber::Float(f2)) => MetricNumber::Float(f * f2),
-            (MetricNumber::Float(f), MetricNumber::Int(i)) => MetricNumber::Float(f * *i as f64),
-            (MetricNumber::Int(i), MetricNumber::Float(f)) => MetricNumber::Float(f * *i as f64),
-            (MetricNumber::Int(i), MetricNumber::Int(i2)) => MetricNumber::Int(i * i2),
-        }
-    }
-}
-
-impl ops::Div for &MetricNumber {
-    type Output = MetricNumber;
-
-    fn div(self, rhs: Self) -> Self::Output {
-        match (self, rhs) {
-            (MetricNumber::Float(f), MetricNumber::Float(f2)) => MetricNumber::Float(f / f2),
-            (MetricNumber::Float(f), MetricNumber::Int(i)) => MetricNumber::Float(f / *i as f64),
-            (MetricNumber::Int(i), MetricNumber::Float(f)) => MetricNumber::Float(f / *i as f64),
-            (MetricNumber::Int(i), MetricNumber::Int(i2)) => MetricNumber::Int(i / i2),
-        }
-    }
-}
+});
 
 #[derive(Debug)]
 pub enum ParseError {
