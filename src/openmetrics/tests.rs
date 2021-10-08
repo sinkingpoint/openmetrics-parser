@@ -1,5 +1,8 @@
 use serde::Deserialize;
-use std::{fs, path::{Path, PathBuf}};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 #[derive(Deserialize, Debug)]
 struct TestMeta {

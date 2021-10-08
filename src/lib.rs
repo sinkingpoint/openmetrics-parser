@@ -5,6 +5,7 @@ extern crate pest_derive;
 #[cfg(test)]
 extern crate serde;
 
+mod internal;
 pub mod openmetrics;
 pub mod prometheus;
 mod public;

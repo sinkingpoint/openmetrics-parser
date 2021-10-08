@@ -1,59 +1,30 @@
-use std::{convert::TryFrom, fmt};
+use std::{convert::TryFrom};
 
 use pest::Parser;
 
-use crate::public::*;
+use crate::{internal::{CounterValueMarshal, LabelNames, MarshalledMetric, MarshalledMetricFamily, MetricFamilyMarshal, MetricMarshal, MetricProcesser, MetricValueMarshal, MetricsType}, public::*};
 
 #[derive(Parser)]
 #[grammar = "prometheus/prometheus.pest"]
 struct PrometheusParser;
 
-trait MarshalledMetricFamily {
-    type Error;
-    fn process_new_metric(
-        &mut self,
-        metric_name: &str,
-        value: MetricNumber,
-        label_names: Vec<String>,
-        label_values: Vec<String>,
-        timestamp: Option<Timestamp>,
-        exemplar: Option<Exemplar>,
-    ) -> Result<(), Self::Error>;
-}
-
-struct MetricProcesser(
-    Box<
-        dyn Fn(
-            &mut MetricMarshal,
-            MetricNumber,
-            Vec<String>,
-            Vec<String>,
-            Option<Exemplar>,
-            bool,
-        ) -> Result<(), ParseError>,
-    >,
-);
-
-impl MetricProcesser {
-    fn new<F>(f: F) -> MetricProcesser
-    where
-        F: Fn(
-                &mut MetricMarshal,
-                MetricNumber,
-                Vec<String>,
-                Vec<String>,
-                Option<Exemplar>,
-                bool,
-            ) -> Result<(), ParseError>
-            + 'static,
-    {
-        MetricProcesser(Box::new(f))
+impl From<pest::error::Error<Rule>> for ParseError {
+    fn from(err: pest::error::Error<Rule>) -> Self {
+        ParseError::ParseError(err.to_string())
     }
 }
 
-impl MarshalledMetricFamily for MetricFamilyMarshal {
+impl MarshalledMetricFamily for MetricFamilyMarshal<PrometheusType> {
     type Error = ParseError;
 
+    fn validate(&self) -> Result<(), ParseError> {
+        for metric in self.metrics.iter() {
+            metric.validate(self)?;
+        }
+
+        Ok(())
+    }
+    
     fn process_new_metric(
         &mut self,
         metric_name: &str,
@@ -112,7 +83,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal {
                         ),
                     ),
                     (
-                        "_count",
+                        "",
                         vec![],
                         MetricProcesser::new(
                             |existing_metric: &mut MetricMarshal,
@@ -448,10 +419,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal {
             ),
         ];
 
-        let metric_type = self
-            .family_type
-            .as_ref().cloned()
-            .unwrap_or_default();
+        let metric_type = self.family_type.as_ref().cloned().unwrap_or_default();
 
         if !metric_type.can_have_exemplar(metric_name) && exemplar.is_some() {
             return Err(ParseError::InvalidMetric(format!(
@@ -549,83 +517,15 @@ impl MarshalledMetricFamily for MetricFamilyMarshal {
     }
 }
 
-#[derive(Debug, Default)]
-struct CounterValueMarshal {
-    value: Option<MetricNumber>,
-    exemplar: Option<Exemplar>,
-}
-
-impl From<CounterValueMarshal> for CounterValue {
-    fn from(s: CounterValueMarshal) -> CounterValue {
-        CounterValue {
-            value: s.value.unwrap(),
-            exemplar: s.exemplar,
-            created: None,
-        }
-    }
-}
-
 impl Default for PrometheusType {
     fn default() -> Self {
         PrometheusType::Unknown
     }
 }
 
-#[derive(Debug)]
-enum MetricValueMarshal {
-    Unknown(Option<MetricNumber>),
-    Gauge(Option<MetricNumber>),
-    Counter(CounterValueMarshal),
-    Histogram(HistogramValue),
-    Summary(SummaryValue),
-}
-
-trait MetricsType {
-    fn can_have_exemplar(&self, metric_name: &str) -> bool;
-    fn can_have_multiple_lines(&self) -> bool;
-    fn get_ignored_labels(&self, metric_name: &str) -> &[&str];
-    fn get_type_value(&self) -> MetricValueMarshal;
-}
-
-#[derive(Debug)]
-struct LabelNames {
-    names: Vec<String>,
-    metric_type: PrometheusType,
-}
-
-impl LabelNames {
-    fn new(sample_name: &str, metric_type: PrometheusType, labels: Vec<String>) -> LabelNames {
-        let ignored_labels = PrometheusType::get_ignored_labels(&metric_type, sample_name);
-        let names = labels
-            .into_iter()
-            .filter(|s| !ignored_labels.contains(&s.as_str()))
-            .collect();
-
-        LabelNames { names, metric_type }
-    }
-
-    fn matches(&self, sample_name: &str, other_labels: &LabelNames) -> bool {
-        let ignored_labels = PrometheusType::get_ignored_labels(&self.metric_type, sample_name);
-        for name in self.names.iter() {
-            if !ignored_labels.contains(&name.as_str()) && !other_labels.names.contains(name) {
-                return false;
-            }
-        }
-
-        true
-    }
-}
-
-#[derive(Debug)]
-struct MetricMarshal {
-    label_values: Vec<String>,
-    timestamp: Option<Timestamp>,
-    value: MetricValueMarshal,
-}
-
-impl From<MetricMarshal> for Metric<PrometheusValue> {
-    fn from(s: MetricMarshal) -> Metric<PrometheusValue> {
-        Metric {
+impl From<MetricMarshal> for Sample<PrometheusValue> {
+    fn from(s: MetricMarshal) -> Sample<PrometheusValue> {
+        Sample {
             label_values: s.label_values,
             timestamp: s.timestamp,
             value: s.value.into(),
@@ -633,20 +533,8 @@ impl From<MetricMarshal> for Metric<PrometheusValue> {
     }
 }
 
-impl MetricMarshal {
-    fn new(
-        label_values: Vec<String>,
-        timestamp: Option<Timestamp>,
-        value: MetricValueMarshal,
-    ) -> MetricMarshal {
-        MetricMarshal {
-            label_values,
-            timestamp,
-            value,
-        }
-    }
-
-    fn validate(&self, family: &MetricFamilyMarshal) -> Result<(), ParseError> {
+impl MarshalledMetric<PrometheusType> for MetricMarshal {
+    fn validate(&self, family: &MetricFamilyMarshal<PrometheusType>) -> Result<(), ParseError> {
         // All the labels are right
         if family.label_names.is_none() && !self.label_values.is_empty()
             || (family.label_names.as_ref().unwrap().names.len() != self.label_values.len())
@@ -672,7 +560,8 @@ impl MetricMarshal {
 
             if !histogram_value
                 .buckets
-                .iter().any(|b| b.upper_bound == f64::INFINITY)
+                .iter()
+                .any(|b| b.upper_bound == f64::INFINITY)
             {
                 return Err(ParseError::InvalidMetric(format!(
                     "Histograms must have a +INF bucket: {:?}",
@@ -694,8 +583,7 @@ impl MetricMarshal {
                 && histogram_value.sum.as_ref().unwrap().as_f64() < 0.
             {
                 return Err(ParseError::InvalidMetric(
-                    "Histograms cannot have a negative sum without a negative bucket"
-                        .to_owned(),
+                    "Histograms cannot have a negative sum without a negative bucket".to_owned(),
                 ));
             }
 
@@ -727,129 +615,6 @@ impl MetricMarshal {
     }
 }
 
-#[derive(Debug)]
-pub enum ParseError {
-    ParseError(pest::error::Error<Rule>),
-    DuplicateMetric,
-    InvalidMetric(String),
-}
-
-impl MetricFamilyMarshal {
-    fn empty() -> MetricFamilyMarshal {
-        MetricFamilyMarshal {
-            name: None,
-            label_names: None,
-            family_type: None,
-            help: None,
-            unit: None,
-            metrics: Vec::new(),
-        }
-    }
-
-    fn validate(&self) -> Result<(), ParseError> {
-        for metric in self.metrics.iter() {
-            metric.validate(self)?;
-        }
-
-        Ok(())
-    }
-
-    fn get_metric_by_labelset_mut(
-        &mut self,
-        label_values: &[String],
-    ) -> Option<&mut MetricMarshal> {
-        return self
-            .metrics
-            .iter_mut()
-            .find(|m| m.label_values == label_values);
-    }
-
-    pub fn add_metric(&mut self, metric: MetricMarshal) {
-        self.metrics.push(metric);
-    }
-
-    fn try_set_label_names(
-        &mut self,
-        sample_name: &str,
-        names: LabelNames,
-    ) -> Result<(), ParseError> {
-        if self.label_names.is_none() {
-            self.label_names = Some(names);
-            return Ok(());
-        }
-
-        let old_names = self.label_names.as_ref().unwrap();
-        if !old_names.matches(sample_name, &names) {
-            return Err(ParseError::InvalidMetric(format!(
-                "Labels in metrics have different label sets ({:?} vs ({:?})",
-                names, old_names
-            )));
-        }
-
-        Ok(())
-    }
-
-    fn set_or_test_name(&mut self, name: String) -> Result<(), ParseError> {
-        let name = Some(name);
-        if self.name.is_some() && self.name != name {
-            return Err(ParseError::InvalidMetric(format!(
-                "Invalid metric name in family. Family name is {}, but got a metric called {}",
-                self.name.as_ref().unwrap(),
-                name.as_ref().unwrap()
-            )));
-        }
-
-        self.name = name;
-        Ok(())
-    }
-
-    fn try_add_help(&mut self, help: String) -> Result<(), ParseError> {
-        if self.help.is_some() {
-            return Err(ParseError::InvalidMetric("Got two help lines in the same metric family".to_string()));
-        }
-
-        self.help = Some(help);
-
-        Ok(())
-    }
-
-    fn try_add_type(&mut self, family_type: PrometheusType) -> Result<(), ParseError> {
-        if self.family_type.is_some() {
-            return Err(ParseError::InvalidMetric("Got two type lines in the same metric family".to_string()));
-        }
-
-        self.family_type = Some(family_type);
-
-        Ok(())
-    }
-}
-
-#[derive(Debug)]
-struct MetricFamilyMarshal {
-    name: Option<String>,
-    label_names: Option<LabelNames>,
-    family_type: Option<PrometheusType>,
-    help: Option<String>,
-    unit: Option<String>,
-    metrics: Vec<MetricMarshal>,
-}
-
-impl From<pest::error::Error<Rule>> for ParseError {
-    fn from(err: pest::error::Error<Rule>) -> Self {
-        ParseError::ParseError(err)
-    }
-}
-
-impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ParseError::ParseError(e) => e.fmt(f),
-            ParseError::DuplicateMetric => f.write_str("Found two metrics with the same labelset"),
-            ParseError::InvalidMetric(s) => f.write_str(s),
-        }
-    }
-}
-
 impl From<MetricValueMarshal> for PrometheusValue {
     fn from(m: MetricValueMarshal) -> PrometheusValue {
         match m {
@@ -858,6 +623,7 @@ impl From<MetricValueMarshal> for PrometheusValue {
             MetricValueMarshal::Counter(c) => PrometheusValue::Counter(c.into()),
             MetricValueMarshal::Histogram(h) => PrometheusValue::Histogram(h),
             MetricValueMarshal::Summary(s) => PrometheusValue::Summary(s),
+            _ => unreachable!(),
         }
     }
 }
@@ -881,7 +647,10 @@ impl MetricsType for PrometheusType {
     }
 
     fn can_have_multiple_lines(&self) -> bool {
-        matches!(self, PrometheusType::Counter | PrometheusType::Histogram | PrometheusType::Summary)
+        matches!(
+            self,
+            PrometheusType::Counter | PrometheusType::Histogram | PrometheusType::Summary
+        )
     }
 
     fn can_have_exemplar(&self, metric_name: &str) -> bool {
@@ -891,17 +660,22 @@ impl MetricsType for PrometheusType {
             _ => false,
         }
     }
+
+    fn can_have_units(&self) -> bool {
+        false
+    }
 }
 
-impl From<MetricFamilyMarshal> for MetricFamily<PrometheusType, PrometheusValue> {
-    fn from(marshal: MetricFamilyMarshal) -> Self {
+impl From<MetricFamilyMarshal<PrometheusType>> for MetricFamily<PrometheusType, PrometheusValue> {
+    fn from(marshal: MetricFamilyMarshal<PrometheusType>) -> Self {
         assert!(marshal.name.is_some());
 
         MetricFamily {
             name: marshal.name.unwrap(),
             label_names: marshal
                 .label_names
-                .map(|names| names.names).unwrap_or_default(),
+                .map(|names| names.names)
+                .unwrap_or_default(),
             family_type: marshal.family_type.unwrap_or_default(),
             help: marshal.help.unwrap_or_default(),
             unit: marshal.unit.unwrap_or_default(),
@@ -935,7 +709,7 @@ pub fn parse_prometheus(
 
     fn parse_metric_descriptor(
         pair: Pair<Rule>,
-        family: &mut MetricFamilyMarshal,
+        family: &mut MetricFamilyMarshal<PrometheusType>,
     ) -> Result<(), ParseError> {
         assert_eq!(pair.as_rule(), Rule::metricdescriptor);
 
@@ -1024,7 +798,10 @@ pub fn parse_prometheus(
         Ok(labels)
     }
 
-    fn parse_sample(pair: Pair<Rule>, family: &mut MetricFamilyMarshal) -> Result<(), ParseError> {
+    fn parse_sample(
+        pair: Pair<Rule>,
+        family: &mut MetricFamilyMarshal<PrometheusType>,
+    ) -> Result<(), ParseError> {
         assert_eq!(pair.as_rule(), Rule::metric);
 
         let mut descriptor = pair.into_inner();
