@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::{CounterValue, Exemplar, HistogramValue, MetricNumber, ParseError, SummaryValue, Timestamp};
+use crate::{CounterValue, Exemplar, HistogramValue, MetricNumber, ParseError, PrometheusCounterValue, SummaryValue, Timestamp};
 
 use super::{MetricsType};
 
@@ -28,6 +28,15 @@ impl From<CounterValueMarshal> for CounterValue {
         CounterValue {
             value: s.value.unwrap(),
             created: s.created,
+            exemplar: s.exemplar,
+        }
+    }
+}
+
+impl From<CounterValueMarshal> for PrometheusCounterValue {
+    fn from(s: CounterValueMarshal) -> PrometheusCounterValue {
+        PrometheusCounterValue {
+            value: s.value.unwrap(),
             exemplar: s.exemplar,
         }
     }

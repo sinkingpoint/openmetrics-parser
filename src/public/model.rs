@@ -214,11 +214,17 @@ pub enum PrometheusType {
     Unknown,
 }
 
+#[derive(Debug, Clone)]
+pub struct PrometheusCounterValue {
+    pub value: MetricNumber,
+    pub exemplar: Option<Exemplar>
+}
+
 #[derive(Debug)]
 pub enum PrometheusValue {
     Unknown(MetricNumber),
     Gauge(MetricNumber),
-    Counter(CounterValue),
+    Counter(PrometheusCounterValue),
     Histogram(HistogramValue),
     Summary(SummaryValue),
 }
