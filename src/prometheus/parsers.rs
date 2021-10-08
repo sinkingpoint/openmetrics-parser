@@ -83,7 +83,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<PrometheusType> {
                         ),
                     ),
                     (
-                        "",
+                        "_count",
                         vec![],
                         MetricProcesser::new(
                             |existing_metric: &mut MetricMarshal,
@@ -128,35 +128,6 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<PrometheusType> {
                         ),
                     ),
                     (
-                        "_created",
-                        vec![],
-                        MetricProcesser::new(
-                            |existing_metric: &mut MetricMarshal,
-                             metric_value: MetricNumber,
-                             _: Vec<String>,
-                             _: Vec<String>,
-                             _: Option<Exemplar>,
-                             _: bool| {
-                                if let MetricValueMarshal::Histogram(histogram_value) =
-                                    &mut existing_metric.value
-                                {
-                                    match histogram_value.timestamp {
-                                        Some(_) => {
-                                            return Err(ParseError::DuplicateMetric);
-                                        }
-                                        None => {
-                                            histogram_value.timestamp = Some(metric_value.as_f64());
-                                        }
-                                    };
-                                } else {
-                                    unreachable!();
-                                }
-
-                                Ok(())
-                            },
-                        ),
-                    ),
-                    (
                         "_sum",
                         vec![],
                         MetricProcesser::new(
@@ -179,6 +150,51 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<PrometheusType> {
                                 } else {
                                     unreachable!();
                                 }
+                            },
+                        ),
+                    ),
+                    (
+                        "",
+                        vec![],
+                        MetricProcesser::new(
+                            |existing_metric: &mut MetricMarshal,
+                             metric_value: MetricNumber,
+                             _: Vec<String>,
+                             _: Vec<String>,
+                             _: Option<Exemplar>,
+                             _: bool| {
+                                if let MetricValueMarshal::Histogram(histogram_value) =
+                                    &mut existing_metric.value
+                                {
+                                    let metric_value = if let Some(value) = metric_value.as_i64() {
+                                        if value < 0 {
+                                            return Err(ParseError::InvalidMetric(format!(
+                                                "Histogram counts must be positive (got: {})",
+                                                value
+                                            )));
+                                        }
+
+                                        value as u64
+                                    } else {
+                                        return Err(ParseError::InvalidMetric(format!(
+                                            "Histogram counts must be integers (got: {})",
+                                            metric_value.as_f64()
+                                        )));
+                                    };
+
+                                    match histogram_value.count {
+                                        Some(_) => {
+                                            return Err(ParseError::DuplicateMetric);
+                                        }
+                                        None => {
+                                            histogram_value.count = Some(metric_value);
+                                        }
+                                    };
+                                } else {
+                                    unreachable!();
+                                }
+
+                                Ok(())
                             },
                         ),
                     ),
@@ -458,6 +474,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<PrometheusType> {
                     )?;
 
                     let metric_name = metric_name.trim_end_matches(suffix);
+                    println!("Using suffix {} on {}, got {}", suffix, metric_name, metric_name);
                     if self.name.is_some() && self.name.as_ref().unwrap() != metric_name {
                         return Err(ParseError::InvalidMetric(format!(
                             "Invalid Name in metric family: {} != {}",

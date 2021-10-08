@@ -891,6 +891,18 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                         actual_label_values.remove(index);
                     }
 
+                    match &self.current_label_set {
+                        None => self.current_label_set = Some(actual_label_values.clone()),
+                        Some(s) => {
+                            if s != &actual_label_values && self.seen_label_sets.contains(&actual_label_values) {
+                                return Err(ParseError::InvalidMetric(format!("Interwoven labelsets: Found {:?} after {:?}", s, self.current_label_set.as_ref().unwrap())));
+                            }
+                        }
+                    }
+
+                    self.current_label_set = Some(actual_label_values.clone());
+                    self.seen_label_sets.push(actual_label_values.clone());
+
                     let name = &metric_name.to_owned();
                     self.try_set_label_names(
                         name,

@@ -45,7 +45,7 @@ where
     pub unit: Option<String>,
     pub metrics: Vec<MetricMarshal>,
     pub seen_label_sets: Vec<Vec<String>>,
-    pub current_label_set: Vec<String>,
+    pub current_label_set: Option<Vec<String>>,
 }
 
 impl<T> MetricFamilyMarshal<T> where T: MetricsType + Clone + Default + fmt::Debug {
@@ -58,7 +58,7 @@ impl<T> MetricFamilyMarshal<T> where T: MetricsType + Clone + Default + fmt::Deb
             unit: None,
             metrics: Vec::new(),
             seen_label_sets: Vec::new(),
-            current_label_set: Vec::new()
+            current_label_set: None
         }
     }
 
