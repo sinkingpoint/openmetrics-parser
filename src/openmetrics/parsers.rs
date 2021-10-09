@@ -354,12 +354,12 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                                 if let MetricValueMarshal::Histogram(histogram_value) =
                                     &mut existing_metric.value
                                 {
-                                    match histogram_value.timestamp {
+                                    match histogram_value.created {
                                         Some(_) => {
                                             return Err(ParseError::DuplicateMetric);
                                         }
                                         None => {
-                                            histogram_value.timestamp = Some(metric_value.as_f64());
+                                            histogram_value.created = Some(metric_value.as_f64());
                                         }
                                     };
                                 } else {

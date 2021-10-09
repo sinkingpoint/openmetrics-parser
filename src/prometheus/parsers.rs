@@ -474,7 +474,6 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<PrometheusType> {
                     )?;
 
                     let metric_name = metric_name.trim_end_matches(suffix);
-                    println!("Using suffix {} on {}, got {}", suffix, metric_name, metric_name);
                     if self.name.is_some() && self.name.as_ref().unwrap() != metric_name {
                         return Err(ParseError::InvalidMetric(format!(
                             "Invalid Name in metric family: {} != {}",

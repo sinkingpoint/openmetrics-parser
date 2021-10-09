@@ -1,3 +1,5 @@
+use std::fmt;
+
 use crate::{Exemplar, MetricNumber, ParseError, Timestamp};
 
 use super::{MetricFamilyMarshal, MetricValueMarshal};
@@ -27,4 +29,8 @@ pub trait MarshalledMetricFamily {
 
 pub trait MarshalledMetric<T> where T: MetricsType {
     fn validate(&self, family: &MetricFamilyMarshal<T>) -> Result<(), ParseError>;
+}
+
+pub trait RenderableMetricValue {
+    fn render(&self, f: &mut fmt::Formatter<'_>, metric_name: &str, timestamp: Option<&Timestamp>, label_names: &[&str], label_values: &[&str]) -> fmt::Result;
 }

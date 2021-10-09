@@ -1,6 +1,8 @@
-use std::{collections::HashMap, fmt, ops};
+use std::{collections::HashMap, fmt::{self, Write}};
 
 use auto_ops::impl_op_ex;
+
+use crate::internal::{RenderableMetricValue, render_label_values};
 
 
 
@@ -30,6 +32,19 @@ impl Exemplar {
     }
 }
 
+impl fmt::Display for Exemplar {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let names: Vec<&str> = self.labels.keys().map(|s| s.as_str()).collect();
+        let values: Vec<&str> = self.labels.keys().map(|s| s.as_str()).collect();
+        write!(f, " # {} {}", render_label_values(&names, &values), self.id)?;
+        if let Some(timestamp) = self.timestamp {
+            write!(f, " {}", timestamp)?;
+        }
+
+        return Ok(());
+    }
+}
+
 /// A MetricFamily is a collection of metrics with the same type, name, and label names
 /// https://github.com/OpenObservability/OpenMetrics/blob/main/specification/OpenMetrics.md#metricfamily
 /// A MetricFamily MAY have zero or more Metrics. A MetricFamily MUST have a name, HELP, TYPE, and UNIT metadata.
@@ -44,10 +59,44 @@ pub struct MetricFamily<TypeSet, ValueType> {
     pub metrics: Vec<Sample<ValueType>>,
 }
 
+impl<TypeSet, ValueType> fmt::Display for MetricFamily<TypeSet, ValueType> where TypeSet: fmt::Display + Default + PartialEq, ValueType: RenderableMetricValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if !self.help.is_empty() {
+            write!(f, "# HELP {} {}\n", self.name, self.help)?;
+        }
+
+        if self.family_type != <TypeSet>::default() {
+            write!(f, "# TYPE {} {}\n", self.name, self.family_type)?;
+        }
+
+        if !self.unit.is_empty() {
+            write!(f, "# UNIT {} {}\n", self.name, self.unit)?;
+        }
+
+        let label_names: Vec<&str> = self.label_names.iter().map(|s| s.as_str()).collect();
+
+        for metric in self.metrics.iter() {
+            metric.render(f, &self.name, &label_names)?;
+        }
+
+        f.write_char('\n')
+    }
+}
+
 /// Exposition is the top level object of the parser. It's a collection of metric families, indexed by name
 #[derive(Debug)]
 pub struct MetricsExposition<TypeSet, ValueType> {
     pub families: HashMap<String, MetricFamily<TypeSet, ValueType>>,
+}
+
+impl<TypeSet, ValueType> fmt::Display for MetricsExposition<TypeSet, ValueType> where TypeSet: fmt::Display + Default + PartialEq, ValueType: RenderableMetricValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (_, family) in self.families.iter() {
+            write!(f, "{}\n", family)?;
+        }
+
+        return Ok(());
+    }
 }
 
 impl<TypeSet, ValueType> Default for MetricsExposition<TypeSet, ValueType> {
@@ -78,12 +127,63 @@ pub struct HistogramBucket {
     pub exemplar: Option<Exemplar>,
 }
 
+impl RenderableMetricValue for HistogramBucket {
+    fn render(&self, f: &mut fmt::Formatter<'_>, metric_name: &str, _: Option<&Timestamp>, label_names: &[&str], label_values: &[&str]) -> fmt::Result {
+        let upper_bound_str = format!("{}", self.upper_bound);
+        let label_names = {
+            let mut names = Vec::from(label_names);
+            names.push("le");
+            names
+        };
+
+        let label_values = {
+            let mut values = Vec::from(label_values);
+            values.push(&upper_bound_str);
+            values
+        };
+
+        write!(f, "{}_bucket{} {}", metric_name, render_label_values(&label_names, &label_values), self.count)?;
+
+        if let Some(ex) = self.exemplar.as_ref() {
+            write!(f, "{}", ex)?;
+        }
+
+        f.write_char('\n')?;
+
+        return Ok(());
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct HistogramValue {
     pub sum: Option<MetricNumber>,
     pub count: Option<u64>,
-    pub timestamp: Option<Timestamp>,
+    pub created: Option<Timestamp>,
     pub buckets: Vec<HistogramBucket>,
+}
+
+impl RenderableMetricValue for HistogramValue {
+    fn render(&self, f: &mut fmt::Formatter<'_>, metric_name: &str, timestamp: Option<&Timestamp>, label_names: &[&str], label_values: &[&str]) -> fmt::Result {
+        for bucket in self.buckets.iter() {
+            bucket.render(f, metric_name, timestamp, label_names, label_values)?;
+        }
+
+        let labels = render_label_values(label_names, label_values);
+
+        if let Some(s) = self.sum {
+            write!(f, "{}_sum{} {}\n", metric_name, labels, s)?;
+        }
+
+        if let Some(c) = self.count {
+            write!(f, "{}_count{} {}\n", metric_name, labels, c)?;
+        }
+
+        if let Some(c) = self.created {
+            write!(f, "{}_created{} {}\n", metric_name, labels, c)?;
+        }
+
+        return Ok(());
+    }
 }
 
 #[derive(Debug)]
@@ -98,12 +198,55 @@ pub struct Quantile {
     pub value: MetricNumber,
 }
 
+impl RenderableMetricValue for Quantile {
+    fn render(&self, f: &mut fmt::Formatter<'_>, metric_name: &str, _: Option<&Timestamp>, label_names: &[&str], label_values: &[&str]) -> fmt::Result {
+        let quantile_str = format!("{}", self.quantile);
+        let label_names = {
+            let mut names = Vec::from(label_names);
+            names.push("quantile");
+            names
+        };
+
+        let label_values = {
+            let mut values = Vec::from(label_values);
+            values.push(&quantile_str);
+            values
+        };
+
+        write!(f, "{}{} {}\n", metric_name, render_label_values(&label_names, &label_values), self.value)
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct SummaryValue {
     pub sum: Option<MetricNumber>,
     pub count: Option<u64>,
-    pub timestamp: Option<Timestamp>,
+    pub created: Option<Timestamp>,
     pub quantiles: Vec<Quantile>,
+}
+
+impl RenderableMetricValue for SummaryValue {
+    fn render(&self, f: &mut fmt::Formatter<'_>, metric_name: &str, timestamp: Option<&Timestamp>, label_names: &[&str], label_values: &[&str]) -> fmt::Result {
+        for q in self.quantiles.iter() {
+            q.render(f, metric_name, timestamp, label_names, label_values)?;
+        }
+
+        let labels = render_label_values(label_names, label_values);
+
+        if let Some(s) = self.sum {
+            write!(f, "{}_sum{} {}\n", metric_name, labels, s)?;
+        }
+
+        if let Some(s) = self.count {
+            write!(f, "{}_count{} {}\n", metric_name, labels, s)?;
+        }
+
+        if let Some(s) = self.created {
+            write!(f, "{}_created{} {}\n", metric_name, labels, s)?;
+        }
+
+        return Ok(());
+    }
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -216,6 +359,20 @@ pub enum PrometheusType {
     Unknown,
 }
 
+impl fmt::Display for PrometheusType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let out = match self {
+            PrometheusType::Counter => "counter",
+            PrometheusType::Gauge => "gauge",
+            PrometheusType::Histogram => "histogram",
+            PrometheusType::Summary => "summary",
+            PrometheusType::Unknown => "unknown",
+        };
+
+        f.write_str(out)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PrometheusCounterValue {
     pub value: MetricNumber,
@@ -231,6 +388,29 @@ pub enum PrometheusValue {
     Summary(SummaryValue),
 }
 
+impl RenderableMetricValue for PrometheusValue {
+    fn render(&self, f: &mut fmt::Formatter<'_>, metric_name: &str, timestamp: Option<&Timestamp>, label_names: &[&str], label_values: &[&str]) -> fmt::Result {
+        let timestamp_str = timestamp.map(|t| format!(" {}", t)).unwrap_or(String::new());
+        match self {
+            PrometheusValue::Unknown(n) | PrometheusValue::Gauge(n) => write!(f, "{}{} {}{}\n", metric_name, render_label_values(label_names, label_values), n, timestamp_str),
+            PrometheusValue::Counter(c) => {
+                write!(f, "{}{} {}{}", metric_name, render_label_values(label_names, label_values), c.value, timestamp_str)?;
+                if let Some(ex) = c.exemplar.as_ref() {
+                    write!(f, "{}", ex)?;
+                }
+
+                f.write_char('\n')
+            },
+            PrometheusValue::Histogram(h) => {
+                h.render(f, metric_name, timestamp, label_names, label_values)
+            },
+            PrometheusValue::Summary(s) => {
+                s.render(f, metric_name, timestamp, label_names, label_values)
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Sample<ValueType> {
     pub label_values: Vec<String>,
@@ -238,10 +418,26 @@ pub struct Sample<ValueType> {
     pub value: ValueType,
 }
 
+impl<ValueType> Sample<ValueType> where ValueType: RenderableMetricValue {
+    fn render(&self, f: &mut fmt::Formatter<'_>, metric_name: &str, label_names: &[&str]) -> fmt::Result {
+        let values: Vec<&str> = self.label_values.iter().map(|s| s.as_str()).collect();
+        self.value.render(f, metric_name, self.timestamp.as_ref(), label_names, &values)
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum MetricNumber {
     Float(f64),
     Int(i64),
+}
+
+impl fmt::Display for MetricNumber {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MetricNumber::Float(n) => write!(f, "{}", n),
+            MetricNumber::Int(n) => write!(f, "{}", n)
+        }
+    }
 }
 
 impl MetricNumber {
