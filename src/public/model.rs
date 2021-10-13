@@ -45,37 +45,6 @@ impl fmt::Display for Exemplar {
     }
 }
 
-pub struct SamplesWithLabels<'a, TypeSet, ValueType> {
-    family: &'a MetricFamily<TypeSet, ValueType>,
-    current_idx: usize
-}
-
-impl<'a, TypeSet, ValueType> SamplesWithLabels<'a, TypeSet, ValueType> {
-    fn new(family: &'a MetricFamily<TypeSet, ValueType>) -> Self {
-        return Self {
-            family,
-            current_idx: 0
-        }
-    }
-}
-
-impl<'a, TypeSet, ValueType> Iterator for SamplesWithLabels<'a, TypeSet, ValueType> {
-    type Item = (&'a Sample<ValueType>, LabelSet<'a>);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.current_idx >= self.family.metrics.len() {
-            return None;
-        }
-
-        let sample = &self.family.metrics[self.current_idx];
-        let labels = LabelSet::new(self.family, sample);
-
-        self.current_idx += 1;
-
-        return Some((sample, labels));
-    }
-}
-
 /// A MetricFamily is a collection of metrics with the same type, name, and label names
 /// https://github.com/OpenObservability/OpenMetrics/blob/main/specification/OpenMetrics.md#metricfamily
 /// A MetricFamily MAY have zero or more Metrics. A MetricFamily MUST have a name, HELP, TYPE, and UNIT metadata.
@@ -115,7 +84,19 @@ impl<TypeSet, ValueType> MetricFamily<TypeSet, ValueType> {
     }
 
     pub fn iter_samples_with_labels<'a>(&'a self) -> impl Iterator<Item=(&'a Sample<ValueType>, LabelSet<'a>)> {
-        return SamplesWithLabels::new(self);
+        return self.metrics.iter().map(move |m| (m, LabelSet::new(&self, m).expect("Samples directly from a family have already been sanity checked")))
+    }
+
+    pub fn into_iter_samples(self) -> impl Iterator<Item=Sample<ValueType>> {
+        return self.metrics.into_iter();
+    }
+
+    pub fn iter_samples<'a>(&'a self) -> impl Iterator<Item=&'a Sample<ValueType>> {
+        return self.metrics.iter()
+    }
+
+    pub fn iter_samples_mut<'a>(&'a mut self) -> impl Iterator<Item=&'a mut Sample<ValueType>> {
+        return self.metrics.iter_mut()
     }
 
     pub fn with_samples<T>(mut self, samples: T) -> Result<Self, ParseError> where T: IntoIterator<Item=Sample<ValueType>> {
@@ -126,12 +107,51 @@ impl<TypeSet, ValueType> MetricFamily<TypeSet, ValueType> {
         return Ok(self);
     }
 
+    pub fn get_sample_matches(&self, sample: &Sample<ValueType>) -> Option<&Sample<ValueType>> {
+        return self.metrics.iter().find(|&s| s.label_values == sample.label_values)
+    }
+
+    pub fn get_sample_matches_mut(&mut self, sample: &Sample<ValueType>) -> Option<&mut Sample<ValueType>> {
+        return self.metrics.iter_mut().find(|s| s.label_values == sample.label_values)
+    }
+
     pub fn get_sample_by_label_values(&self, label_values: &[String]) -> Option<&Sample<ValueType>> {
         return self.metrics.iter().find(|s| s.label_values == label_values)
     }
 
+    pub fn get_sample_by_label_values_mut(&mut self, label_values: &[String]) -> Option<&mut Sample<ValueType>> {
+        return self.metrics.iter_mut().find(|s| s.label_values == label_values)
+    }
+
     pub fn get_sample_by_labelset(&self, labelset: &LabelSet) -> Option<&Sample<ValueType>> {
         return self.metrics.iter().find(|s| labelset.matches_sample(s))
+    }
+
+    pub fn get_sample_by_labelset_mut(&mut self, labelset: &LabelSet) -> Option<&mut Sample<ValueType>> {
+        return self.metrics.iter_mut().find(|s| labelset.matches_sample(s))
+    }
+
+    pub fn get_labelset_for<'a>(&'a self, sample: &'a Sample<ValueType>) -> Result<LabelSet<'a>, ParseError> {
+        return LabelSet::new(self, sample);
+    }
+
+    pub fn set_label(&mut self, label_name: &str, label_value: &str) {
+        let index = match self.label_names.iter().position(|s| s == label_name) {
+            Some(position) => position,
+            None => {
+                self.label_names.push(label_name.to_owned());
+                self.label_names.len() - 1
+            },
+        };
+
+        for metric in self.metrics.iter_mut() {
+            if index == metric.label_values.len() {
+                metric.label_values.push(label_value.to_owned());
+            }
+            else {
+                metric.label_values[index] = label_value.to_owned();
+            }
+        }
     }
 
     pub fn add_sample(&mut self, s: Sample<ValueType>) -> Result<(), ParseError> {
@@ -641,11 +661,15 @@ pub struct LabelSet<'a> {
 }
 
 impl<'a> LabelSet<'a> {
-    pub fn new<TypeSet, ValueType>(family: &'a MetricFamily<TypeSet, ValueType>, sample: &'a Sample<ValueType>) -> Self {
-        return Self {
+    pub fn new<TypeSet, ValueType>(family: &'a MetricFamily<TypeSet, ValueType>, sample: &'a Sample<ValueType>) -> Result<Self, ParseError> {
+        if family.label_names.len() != sample.label_values.len() {
+            return Err(ParseError::InvalidMetric(format!("Cannot create labelset from family with {} labels and sample with {}", family.label_names.len(), sample.label_values.len())));
+        }
+
+        return Ok(Self {
             label_names: &family.label_names,
             label_values: &sample.label_values
-        }
+        })
     }
 
     pub fn matches_sample<ValueType>(&self, sample: &Sample<ValueType>) -> bool {
