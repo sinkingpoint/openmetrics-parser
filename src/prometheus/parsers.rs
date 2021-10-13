@@ -541,11 +541,11 @@ impl Default for PrometheusType {
 
 impl From<MetricMarshal> for Sample<PrometheusValue> {
     fn from(s: MetricMarshal) -> Sample<PrometheusValue> {
-        Sample {
-            label_values: s.label_values,
-            timestamp: s.timestamp,
-            value: s.value.into(),
-        }
+        Sample::new(
+            s.label_values,
+            s.timestamp,
+            s.value.into(),
+        )
     }
 }
 

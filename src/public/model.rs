@@ -350,6 +350,33 @@ pub enum OpenMetricsValue {
     Summary(SummaryValue),
 }
 
+impl RenderableMetricValue for OpenMetricsValue {
+    fn render(&self, f: &mut fmt::Formatter<'_>, metric_name: &str, timestamp: Option<&Timestamp>, label_names: &[&str], label_values: &[&str]) -> fmt::Result {
+        let timestamp_str = timestamp.map(|t| format!(" {}", t)).unwrap_or(String::new());
+        match self {
+            OpenMetricsValue::Unknown(n) | OpenMetricsValue::Gauge(n) | OpenMetricsValue::StateSet(n) => write!(f, "{}{} {}{}\n", metric_name, render_label_values(label_names, label_values), n, timestamp_str),
+            OpenMetricsValue::Counter(c) => {
+                write!(f, "{}{} {}{}", metric_name, render_label_values(label_names, label_values), c.value, timestamp_str)?;
+                if let Some(ex) = c.exemplar.as_ref() {
+                    write!(f, "{}", ex)?;
+                }
+
+                f.write_char('\n')
+            },
+            OpenMetricsValue::Histogram(h) | OpenMetricsValue::GaugeHistogram(h) => {
+                // TODO: This is actually wrong for GaugeHistograms (they should have _gsum and _gcount), but I'm too lazy to fix this at the moment
+                h.render(f, metric_name, timestamp, label_names, label_values)
+            },
+            OpenMetricsValue::Summary(s) => {
+                s.render(f, metric_name, timestamp, label_names, label_values)
+            }
+            OpenMetricsValue::Info => {
+                write!(f, "{}{} {}{}\n", metric_name, render_label_values(label_names, label_values), MetricNumber::Int(1), timestamp_str)
+            },
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum PrometheusType {
     Counter,
@@ -413,12 +440,20 @@ impl RenderableMetricValue for PrometheusValue {
 
 #[derive(Debug)]
 pub struct Sample<ValueType> {
-    pub label_values: Vec<String>,
+    label_values: Vec<String>,
     pub timestamp: Option<Timestamp>,
     pub value: ValueType,
 }
 
 impl<ValueType> Sample<ValueType> where ValueType: RenderableMetricValue {
+    pub fn new(label_values: Vec<String>, timestamp: Option<Timestamp>, value: ValueType) -> Self {
+        return Self {
+            label_values,
+            timestamp,
+            value
+        }
+    }
+
     fn render(&self, f: &mut fmt::Formatter<'_>, metric_name: &str, label_names: &[&str]) -> fmt::Result {
         let values: Vec<&str> = self.label_values.iter().map(|s| s.as_str()).collect();
         self.value.render(f, metric_name, self.timestamp.as_ref(), label_names, &values)

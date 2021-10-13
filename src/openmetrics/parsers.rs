@@ -112,11 +112,11 @@ impl Default for OpenMetricsType {
 
 impl From<MetricMarshal> for Sample<OpenMetricsValue> {
     fn from(s: MetricMarshal) -> Sample<OpenMetricsValue> {
-        Sample {
-            label_values: s.label_values,
-            timestamp: s.timestamp,
-            value: s.value.into(),
-        }
+        Sample::new(
+            s.label_values,
+            s.timestamp,
+            s.value.into(),
+        )
     }
 }
 
