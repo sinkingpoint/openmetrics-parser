@@ -45,6 +45,37 @@ impl fmt::Display for Exemplar {
     }
 }
 
+pub struct SamplesWithLabels<'a, TypeSet, ValueType> {
+    family: &'a MetricFamily<TypeSet, ValueType>,
+    current_idx: usize
+}
+
+impl<'a, TypeSet, ValueType> SamplesWithLabels<'a, TypeSet, ValueType> {
+    fn new(family: &'a MetricFamily<TypeSet, ValueType>) -> Self {
+        return Self {
+            family,
+            current_idx: 0
+        }
+    }
+}
+
+impl<'a, TypeSet, ValueType> Iterator for SamplesWithLabels<'a, TypeSet, ValueType> {
+    type Item = (&'a Sample<ValueType>, LabelSet<'a>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_idx >= self.family.metrics.len() {
+            return None;
+        }
+
+        let sample = &self.family.metrics[self.current_idx];
+        let labels = LabelSet::new(self.family, sample);
+
+        self.current_idx += 1;
+
+        return Some((sample, labels));
+    }
+}
+
 /// A MetricFamily is a collection of metrics with the same type, name, and label names
 /// https://github.com/OpenObservability/OpenMetrics/blob/main/specification/OpenMetrics.md#metricfamily
 /// A MetricFamily MAY have zero or more Metrics. A MetricFamily MUST have a name, HELP, TYPE, and UNIT metadata.
@@ -71,6 +102,22 @@ impl<TypeSet, ValueType> MetricFamily<TypeSet, ValueType> {
         }
     }
 
+    pub fn remove_label(&mut self, label_name: &str) {
+        let idx = match self.label_names.iter().position(|s| s == label_name) {
+            Some(i) => i,
+            None => return
+        };
+
+        self.label_names.remove(idx);
+        for metric in self.metrics.iter_mut() {
+            metric.label_values.remove(idx);
+        }
+    }
+
+    pub fn iter_samples_with_labels<'a>(&'a self) -> impl Iterator<Item=(&'a Sample<ValueType>, LabelSet<'a>)> {
+        return SamplesWithLabels::new(self);
+    }
+
     pub fn with_samples<T>(mut self, samples: T) -> Result<Self, ParseError> where T: IntoIterator<Item=Sample<ValueType>> {
         for sample in samples {
             self.add_sample(sample)?;
@@ -79,8 +126,12 @@ impl<TypeSet, ValueType> MetricFamily<TypeSet, ValueType> {
         return Ok(self);
     }
 
-    pub fn get_sample_by_labelset(&self, label_values: &[String]) -> Option<&Sample<ValueType>> {
+    pub fn get_sample_by_label_values(&self, label_values: &[String]) -> Option<&Sample<ValueType>> {
         return self.metrics.iter().find(|s| s.label_values == label_values)
+    }
+
+    pub fn get_sample_by_labelset(&self, labelset: &LabelSet) -> Option<&Sample<ValueType>> {
+        return self.metrics.iter().find(|s| labelset.matches_sample(s))
     }
 
     pub fn add_sample(&mut self, s: Sample<ValueType>) -> Result<(), ParseError> {
@@ -88,7 +139,7 @@ impl<TypeSet, ValueType> MetricFamily<TypeSet, ValueType> {
             return Err(ParseError::InvalidMetric(format!("Cannot add a sample with {} labels into a family with {}", s.label_values.len(), self.label_names.len())));
         }
 
-        if self.get_sample_by_labelset(&s.label_values).is_some() {
+        if self.get_sample_by_label_values(&s.label_values).is_some() {
             return Err(ParseError::InvalidMetric(format!("Cannot add a duplicate metric to a MetricFamily (Label Values: {:?})", s.label_values)));
         }
 
@@ -581,5 +632,43 @@ impl fmt::Display for ParseError {
             ParseError::DuplicateMetric => f.write_str("Found two metrics with the same labelset"),
             ParseError::InvalidMetric(s) => f.write_str(s),
         }
+    }
+}
+
+pub struct LabelSet<'a> {
+    label_names: &'a [String],
+    label_values: &'a [String]
+}
+
+impl<'a> LabelSet<'a> {
+    pub fn new<TypeSet, ValueType>(family: &'a MetricFamily<TypeSet, ValueType>, sample: &'a Sample<ValueType>) -> Self {
+        return Self {
+            label_names: &family.label_names,
+            label_values: &sample.label_values
+        }
+    }
+
+    pub fn matches_sample<ValueType>(&self, sample: &Sample<ValueType>) -> bool {
+        return self.matches_values(&sample.label_values);
+    }
+
+    pub fn matches_values(&self, label_values: &Vec<String>) -> bool {
+        return self.label_values == label_values;
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item=(&String, &String)> {
+        return self.label_names.iter().zip(self.label_values);
+    }
+
+    pub fn iter_names(&self) -> impl Iterator<Item=&String> {
+        return self.label_names.iter();
+    }
+
+    pub fn iter_values(&self) -> impl Iterator<Item=&String> {
+        return self.label_values.iter();
+    }
+
+    pub fn get_label_value(&self, label_name: &str) -> Option<&str> {
+        return self.label_names.iter().position(|s| s == label_name).map(|i| self.label_values[i].as_str())
     }
 }
