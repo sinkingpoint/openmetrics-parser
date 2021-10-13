@@ -686,17 +686,16 @@ impl From<MetricFamilyMarshal<PrometheusType>> for MetricFamily<PrometheusType, 
     fn from(marshal: MetricFamilyMarshal<PrometheusType>) -> Self {
         assert!(marshal.name.is_some());
 
-        MetricFamily {
-            name: marshal.name.unwrap(),
-            label_names: marshal
+        MetricFamily::new(
+            marshal.name.unwrap(),
+            marshal
                 .label_names
                 .map(|names| names.names)
                 .unwrap_or_default(),
-            family_type: marshal.family_type.unwrap_or_default(),
-            help: marshal.help.unwrap_or_default(),
-            unit: marshal.unit.unwrap_or_default(),
-            metrics: marshal.metrics.into_iter().map(|m| m.into()).collect(),
-        }
+            marshal.family_type.unwrap_or_default(),
+            marshal.help.unwrap_or_default(),
+            marshal.unit.unwrap_or_default(),
+        ).with_samples(marshal.metrics.into_iter().map(|m| m.into())).unwrap()
     }
 }
 
@@ -923,14 +922,14 @@ pub fn parse_prometheus(
             Rule::metricfamily => {
                 let family = parse_metric_family(span)?;
 
-                if exposition.families.contains_key(&family.name) {
+                if exposition.families.contains_key(&family.family_name) {
                     return Err(ParseError::InvalidMetric(format!(
                         "Found a metric family called {}, after that family was finalised",
-                        family.name
+                        family.family_name
                     )));
                 }
 
-                exposition.families.insert(family.name.clone(), family);
+                exposition.families.insert(family.family_name.clone(), family);
             }
             Rule::EOI => {}
             _ => unreachable!(),

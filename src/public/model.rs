@@ -51,32 +51,71 @@ impl fmt::Display for Exemplar {
 /// Every Metric within a MetricFamily MUST have a unique LabelSet.
 #[derive(Debug, Default)]
 pub struct MetricFamily<TypeSet, ValueType> {
-    pub name: String,
-    pub label_names: Vec<String>,
+    pub family_name: String,
+    label_names: Vec<String>,
     pub family_type: TypeSet,
     pub help: String,
     pub unit: String,
-    pub metrics: Vec<Sample<ValueType>>,
+    metrics: Vec<Sample<ValueType>>,
+}
+
+impl<TypeSet, ValueType> MetricFamily<TypeSet, ValueType> {
+    pub fn new(family_name: String, label_names: Vec<String>, family_type: TypeSet, help: String, unit: String) -> Self {
+        return Self {
+            family_name,
+            label_names,
+            family_type,
+            help,
+            unit,
+            metrics: Vec::new()
+        }
+    }
+
+    pub fn with_samples<T>(mut self, samples: T) -> Result<Self, ParseError> where T: IntoIterator<Item=Sample<ValueType>> {
+        for sample in samples {
+            self.add_sample(sample)?;
+        }
+
+        return Ok(self);
+    }
+
+    pub fn get_sample_by_labelset(&self, label_values: &[String]) -> Option<&Sample<ValueType>> {
+        return self.metrics.iter().find(|s| s.label_values == label_values)
+    }
+
+    pub fn add_sample(&mut self, s: Sample<ValueType>) -> Result<(), ParseError> {
+        if s.label_values.len() != self.label_names.len() {
+            return Err(ParseError::InvalidMetric(format!("Cannot add a sample with {} labels into a family with {}", s.label_values.len(), self.label_names.len())));
+        }
+
+        if self.get_sample_by_labelset(&s.label_values).is_some() {
+            return Err(ParseError::InvalidMetric(format!("Cannot add a duplicate metric to a MetricFamily (Label Values: {:?})", s.label_values)));
+        }
+
+        self.metrics.push(s);
+
+        return Ok(());
+    }
 }
 
 impl<TypeSet, ValueType> fmt::Display for MetricFamily<TypeSet, ValueType> where TypeSet: fmt::Display + Default + PartialEq, ValueType: RenderableMetricValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if !self.help.is_empty() {
-            write!(f, "# HELP {} {}\n", self.name, self.help)?;
+            write!(f, "# HELP {} {}\n", self.family_name, self.help)?;
         }
 
         if self.family_type != <TypeSet>::default() {
-            write!(f, "# TYPE {} {}\n", self.name, self.family_type)?;
+            write!(f, "# TYPE {} {}\n", self.family_name, self.family_type)?;
         }
 
         if !self.unit.is_empty() {
-            write!(f, "# UNIT {} {}\n", self.name, self.unit)?;
+            write!(f, "# UNIT {} {}\n", self.family_name, self.unit)?;
         }
 
         let label_names: Vec<&str> = self.label_names.iter().map(|s| s.as_str()).collect();
 
         for metric in self.metrics.iter() {
-            metric.render(f, &self.name, &label_names)?;
+            metric.render(f, &self.family_name, &label_names)?;
         }
 
         f.write_char('\n')
