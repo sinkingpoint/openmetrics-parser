@@ -1,7 +1,16 @@
 [package]
-name = "openmetrics_parser"
+name = "openmetrics-parser"
 version = "0.1.0"
 edition = "2018"
+license-file = "LICENSE"
+description = "An OpenMetrics/Prometheus Text Exposition Format Parser"
+homepage = "https://github.com/sinkingpoint/openmetrics-parser"
+repository = "https://github.com/sinkingpoint/openmetrics-parser"
+readme = "README.md"
+keywords = ["openmetrics", "prometheus", "parser"]
+exclude = [
+    "OpenMetrics"
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
