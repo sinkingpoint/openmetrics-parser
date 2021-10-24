@@ -1,6 +1,5 @@
 fn escape_str(s: &str) -> String {
-    s
-        .replace("\\", "\\\\")
+    s.replace("\\", "\\\\")
         .replace("\n", "\\n")
         .replace("\"", "\\\"")
 }

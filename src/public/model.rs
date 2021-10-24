@@ -83,7 +83,10 @@ where
         }
     }
 
-    pub fn with_labels<'a, T, S>(&self, labels: T) -> Result<Self, ParseError> where T: IntoIterator<Item=(&'a str, &'a str)> {
+    pub fn with_labels<'a, T>(&self, labels: T) -> Self
+    where
+        T: IntoIterator<Item = (&'a str, &'a str)>,
+    {
         let mut label_names = self.label_names.as_ref().clone();
         let mut samples = self.metrics.clone();
         for (k, v) in labels {
@@ -92,7 +95,7 @@ where
                     for sample in samples.iter_mut() {
                         sample.label_values[idx] = v.to_owned();
                     }
-                },
+                }
                 None => {
                     label_names.push(k.to_owned());
                     for sample in samples.iter_mut() {
@@ -108,7 +111,9 @@ where
             self.family_type.clone(),
             self.help.clone(),
             self.unit.clone(),
-        ).with_samples(samples)
+        )
+        .with_samples(samples)
+        .unwrap()
     }
 
     pub fn without_label(&self, label_name: &str) -> Result<Self, ParseError> {
@@ -602,8 +607,7 @@ impl RenderableMetricValue for OpenMetricsValue {
         label_names: &[&str],
         label_values: &[&str],
     ) -> fmt::Result {
-        let timestamp_str = timestamp
-            .map(|t| format!(" {}", t)).unwrap_or_default();
+        let timestamp_str = timestamp.map(|t| format!(" {}", t)).unwrap_or_default();
         match self {
             OpenMetricsValue::Unknown(n)
             | OpenMetricsValue::Gauge(n)
@@ -698,8 +702,7 @@ impl RenderableMetricValue for PrometheusValue {
         label_names: &[&str],
         label_values: &[&str],
     ) -> fmt::Result {
-        let timestamp_str = timestamp
-            .map(|t| format!(" {}", t)).unwrap_or_default();
+        let timestamp_str = timestamp.map(|t| format!(" {}", t)).unwrap_or_default();
         match self {
             PrometheusValue::Unknown(n) | PrometheusValue::Gauge(n) => writeln!(
                 f,
@@ -764,7 +767,10 @@ where
             return LabelSet::new(label_names.clone(), self);
         }
 
-        Err(ParseError::InvalidMetric("Metric has not been bound to a family yet, and thus doesn't have label names".to_string()))
+        Err(ParseError::InvalidMetric(
+            "Metric has not been bound to a family yet, and thus doesn't have label names"
+                .to_string(),
+        ))
     }
 
     fn render(

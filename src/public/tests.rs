@@ -1,9 +1,9 @@
-use crate::{
-    MetricFamily, MetricNumber, PrometheusCounterValue, PrometheusType, PrometheusValue, Sample,
-};
-
 #[test]
 fn test_label_sets() {
+    use crate::{
+        MetricFamily, MetricNumber, PrometheusCounterValue, PrometheusType, PrometheusValue, Sample,
+    };
+
     let family = MetricFamily::new(
         String::from("test_metric"),
         vec![
