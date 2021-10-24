@@ -1,9 +1,3 @@
-fn escape_str(s: &str) -> String {
-    s.replace("\\", "\\\\")
-        .replace("\n", "\\n")
-        .replace("\"", "\\\"")
-}
-
 pub fn render_label_values(label_names: &[&str], label_values: &[&str]) -> String {
     if label_names.is_empty() {
         return String::new();
@@ -14,7 +8,7 @@ pub fn render_label_values(label_names: &[&str], label_values: &[&str]) -> Strin
     build.push('{');
     let mut labels = Vec::new();
     for (name, value) in label_names.iter().zip(label_values.iter()) {
-        labels.push(format!("{}=\"{}\"", name, escape_str(value)));
+        labels.push(format!("{}=\"{}\"", name, value));
     }
     build.push_str(&labels.join(","));
     build.push('}');

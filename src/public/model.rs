@@ -38,9 +38,9 @@ impl fmt::Display for Exemplar {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let names: Vec<&str> = self.labels.keys().map(|s| s.as_str()).collect();
         let values: Vec<&str> = self.labels.keys().map(|s| s.as_str()).collect();
-        write!(f, " # {} {}", render_label_values(&names, &values), self.id)?;
+        write!(f, "# {} {}", render_label_values(&names, &values), self.id)?;
         if let Some(timestamp) = self.timestamp {
-            write!(f, " {}", timestamp)?;
+            write!(f, " {}", format_float(timestamp))?;
         }
 
         Ok(())
@@ -328,6 +328,21 @@ pub struct CounterValue {
     pub exemplar: Option<Exemplar>,
 }
 
+fn format_float(f: f64) -> String {
+    if f == f64::NEG_INFINITY {
+        String::from("-Inf")
+    }
+    else if f == f64::INFINITY {
+        String::from("+Inf")
+    }
+    else if f.is_nan() {
+        String::from("NaN")
+    }
+    else {
+        format!("{}", f)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct HistogramBucket {
     pub count: MetricNumber,
@@ -344,7 +359,7 @@ impl RenderableMetricValue for HistogramBucket {
         label_names: &[&str],
         label_values: &[&str],
     ) -> fmt::Result {
-        let upper_bound_str = format!("{}", self.upper_bound);
+        let upper_bound_str = format_float(self.upper_bound);
         let label_names = {
             let mut names = Vec::from(label_names);
             names.push("le");
@@ -435,7 +450,7 @@ impl RenderableMetricValue for Quantile {
         label_names: &[&str],
         label_values: &[&str],
     ) -> fmt::Result {
-        let quantile_str = format!("{}", self.quantile);
+        let quantile_str = format_float(self.quantile);
         let label_names = {
             let mut names = Vec::from(label_names);
             names.push("quantile");
@@ -607,18 +622,20 @@ impl RenderableMetricValue for OpenMetricsValue {
         label_names: &[&str],
         label_values: &[&str],
     ) -> fmt::Result {
-        let timestamp_str = timestamp.map(|t| format!(" {}", t)).unwrap_or_default();
+        let timestamp_str = timestamp.map(|t| format!(" {}", format_float(*t))).unwrap_or_default();
         match self {
             OpenMetricsValue::Unknown(n)
             | OpenMetricsValue::Gauge(n)
-            | OpenMetricsValue::StateSet(n) => writeln!(
-                f,
-                "{}{} {}{}",
-                metric_name,
-                render_label_values(label_names, label_values),
-                n,
-                timestamp_str
-            ),
+            | OpenMetricsValue::StateSet(n) =>{
+                writeln!(
+                    f,
+                    "{}{} {}{}",
+                    metric_name,
+                    render_label_values(label_names, label_values),
+                    n,
+                    timestamp_str
+                )
+            },
             OpenMetricsValue::Counter(c) => {
                 write!(
                     f,
@@ -644,7 +661,7 @@ impl RenderableMetricValue for OpenMetricsValue {
             OpenMetricsValue::Info => {
                 writeln!(
                     f,
-                    "{}{} {}{}",
+                    "{}{} {} {}",
                     metric_name,
                     render_label_values(label_names, label_values),
                     MetricNumber::Int(1),
@@ -702,7 +719,7 @@ impl RenderableMetricValue for PrometheusValue {
         label_names: &[&str],
         label_values: &[&str],
     ) -> fmt::Result {
-        let timestamp_str = timestamp.map(|t| format!(" {}", t)).unwrap_or_default();
+        let timestamp_str = timestamp.map(|t| format!(" {}", format_float(*t))).unwrap_or_default();
         match self {
             PrometheusValue::Unknown(n) | PrometheusValue::Gauge(n) => writeln!(
                 f,
@@ -799,7 +816,7 @@ pub enum MetricNumber {
 impl fmt::Display for MetricNumber {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            MetricNumber::Float(n) => write!(f, "{}", n),
+            MetricNumber::Float(n) => write!(f, "{}", format_float(*n)),
             MetricNumber::Int(n) => write!(f, "{}", n),
         }
     }

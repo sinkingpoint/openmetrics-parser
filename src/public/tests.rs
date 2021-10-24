@@ -1,3 +1,5 @@
+use crate::prometheus::parse_prometheus;
+
 #[test]
 fn test_label_sets() {
     use crate::{
@@ -61,4 +63,12 @@ fn test_label_sets() {
             .get_label_value("test_label_to_remove")
             .is_none());
     }
+}
+
+#[test]
+fn test_render() {
+    let test_str = include_str!("../prometheus/testdata/upstream_example.txt");
+    let exposition = parse_prometheus(test_str).unwrap();
+    let exposition_str = exposition.to_string();
+    assert!(parse_prometheus(&exposition_str).is_ok());
 }

@@ -1,8 +1,8 @@
 [package]
 name = "openmetrics-parser"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2018"
-license-file = "LICENSE"
+license = "LGPL-3.0"
 description = "An OpenMetrics/Prometheus Text Exposition Format Parser"
 homepage = "https://github.com/sinkingpoint/openmetrics-parser"
 repository = "https://github.com/sinkingpoint/openmetrics-parser"
