@@ -1,12 +1,12 @@
 fn escape_str(s: &str) -> String {
-    return s
+    s
         .replace("\\", "\\\\")
         .replace("\n", "\\n")
-        .replace("\"", "\\\"");
+        .replace("\"", "\\\"")
 }
 
 pub fn render_label_values(label_names: &[&str], label_values: &[&str]) -> String {
-    if label_names.len() == 0 {
+    if label_names.is_empty() {
         return String::new();
     }
 
@@ -20,5 +20,5 @@ pub fn render_label_values(label_names: &[&str], label_values: &[&str]) -> Strin
     build.push_str(&labels.join(","));
     build.push('}');
 
-    return build;
+    build
 }

@@ -43,7 +43,7 @@ impl fmt::Display for Exemplar {
             write!(f, " {}", timestamp)?;
         }
 
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -73,14 +73,14 @@ where
         help: String,
         unit: String,
     ) -> Self {
-        return Self {
+        Self {
             family_name,
             label_names: Arc::new(label_names),
             family_type,
             help,
             unit,
             metrics: Vec::new(),
-        };
+        }
     }
 
     pub fn with_labels<'a, T, S>(&self, labels: T) -> Result<Self, ParseError> where T: IntoIterator<Item=(&'a str, &'a str)> {
@@ -102,13 +102,13 @@ where
             }
         }
 
-        Ok(Self::new(
+        Self::new(
             self.family_name.clone(),
             label_names,
             self.family_type.clone(),
             self.help.clone(),
             self.unit.clone(),
-        ).with_samples(samples)?)
+        ).with_samples(samples)
     }
 
     pub fn without_label(&self, label_name: &str) -> Result<Self, ParseError> {
@@ -128,7 +128,7 @@ where
                     let mut label_values = sample.label_values.clone();
                     label_values.remove(idx);
                     let new_sample =
-                        Sample::new(label_values, sample.timestamp.clone(), sample.value.clone());
+                        Sample::new(label_values, sample.timestamp, sample.value.clone());
                     base.add_sample(new_sample)?;
                 }
 
@@ -142,15 +142,15 @@ where
     }
 
     pub fn into_iter_samples(self) -> impl Iterator<Item = Sample<ValueType>> {
-        return self.metrics.into_iter();
+        self.metrics.into_iter()
     }
 
-    pub fn iter_samples<'a>(&'a self) -> impl Iterator<Item = &'a Sample<ValueType>> {
-        return self.metrics.iter();
+    pub fn iter_samples(&self) -> impl Iterator<Item = &Sample<ValueType>> {
+        self.metrics.iter()
     }
 
-    pub fn iter_samples_mut<'a>(&'a mut self) -> impl Iterator<Item = &'a mut Sample<ValueType>> {
-        return self.metrics.iter_mut();
+    pub fn iter_samples_mut(&mut self) -> impl Iterator<Item = &mut Sample<ValueType>> {
+        self.metrics.iter_mut()
     }
 
     pub fn with_samples<T>(mut self, samples: T) -> Result<Self, ParseError>
@@ -161,7 +161,7 @@ where
             self.add_sample(sample)?;
         }
 
-        return Ok(self);
+        Ok(self)
     }
 
     pub fn get_sample_matches(&self, sample: &Sample<ValueType>) -> Option<&Sample<ValueType>> {
@@ -250,7 +250,7 @@ where
         s.set_label_names(self.label_names.clone());
         self.metrics.push(s);
 
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -261,15 +261,15 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if !self.help.is_empty() {
-            write!(f, "# HELP {} {}\n", self.family_name, self.help)?;
+            writeln!(f, "# HELP {} {}", self.family_name, self.help)?;
         }
 
         if self.family_type != <TypeSet>::default() {
-            write!(f, "# TYPE {} {}\n", self.family_name, self.family_type)?;
+            writeln!(f, "# TYPE {} {}", self.family_name, self.family_type)?;
         }
 
         if !self.unit.is_empty() {
-            write!(f, "# UNIT {} {}\n", self.family_name, self.unit)?;
+            writeln!(f, "# UNIT {} {}", self.family_name, self.unit)?;
         }
 
         let label_names: Vec<&str> = self.label_names.iter().map(|s| s.as_str()).collect();
@@ -295,10 +295,10 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (_, family) in self.families.iter() {
-            write!(f, "{}\n", family)?;
+            writeln!(f, "{}", family)?;
         }
 
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -366,7 +366,7 @@ impl RenderableMetricValue for HistogramBucket {
 
         f.write_char('\n')?;
 
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -394,18 +394,18 @@ impl RenderableMetricValue for HistogramValue {
         let labels = render_label_values(label_names, label_values);
 
         if let Some(s) = self.sum {
-            write!(f, "{}_sum{} {}\n", metric_name, labels, s)?;
+            writeln!(f, "{}_sum{} {}", metric_name, labels, s)?;
         }
 
         if let Some(c) = self.count {
-            write!(f, "{}_count{} {}\n", metric_name, labels, c)?;
+            writeln!(f, "{}_count{} {}", metric_name, labels, c)?;
         }
 
         if let Some(c) = self.created {
-            write!(f, "{}_created{} {}\n", metric_name, labels, c)?;
+            writeln!(f, "{}_created{} {}", metric_name, labels, c)?;
         }
 
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -443,9 +443,9 @@ impl RenderableMetricValue for Quantile {
             values
         };
 
-        write!(
+        writeln!(
             f,
-            "{}{} {}\n",
+            "{}{} {}",
             metric_name,
             render_label_values(&label_names, &label_values),
             self.value
@@ -477,18 +477,18 @@ impl RenderableMetricValue for SummaryValue {
         let labels = render_label_values(label_names, label_values);
 
         if let Some(s) = self.sum {
-            write!(f, "{}_sum{} {}\n", metric_name, labels, s)?;
+            writeln!(f, "{}_sum{} {}", metric_name, labels, s)?;
         }
 
         if let Some(s) = self.count {
-            write!(f, "{}_count{} {}\n", metric_name, labels, s)?;
+            writeln!(f, "{}_count{} {}", metric_name, labels, s)?;
         }
 
         if let Some(s) = self.created {
-            write!(f, "{}_created{} {}\n", metric_name, labels, s)?;
+            writeln!(f, "{}_created{} {}", metric_name, labels, s)?;
         }
 
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -603,14 +603,13 @@ impl RenderableMetricValue for OpenMetricsValue {
         label_values: &[&str],
     ) -> fmt::Result {
         let timestamp_str = timestamp
-            .map(|t| format!(" {}", t))
-            .unwrap_or(String::new());
+            .map(|t| format!(" {}", t)).unwrap_or_default();
         match self {
             OpenMetricsValue::Unknown(n)
             | OpenMetricsValue::Gauge(n)
-            | OpenMetricsValue::StateSet(n) => write!(
+            | OpenMetricsValue::StateSet(n) => writeln!(
                 f,
-                "{}{} {}{}\n",
+                "{}{} {}{}",
                 metric_name,
                 render_label_values(label_names, label_values),
                 n,
@@ -639,9 +638,9 @@ impl RenderableMetricValue for OpenMetricsValue {
                 s.render(f, metric_name, timestamp, label_names, label_values)
             }
             OpenMetricsValue::Info => {
-                write!(
+                writeln!(
                     f,
-                    "{}{} {}{}\n",
+                    "{}{} {}{}",
                     metric_name,
                     render_label_values(label_names, label_values),
                     MetricNumber::Int(1),
@@ -700,12 +699,11 @@ impl RenderableMetricValue for PrometheusValue {
         label_values: &[&str],
     ) -> fmt::Result {
         let timestamp_str = timestamp
-            .map(|t| format!(" {}", t))
-            .unwrap_or(String::new());
+            .map(|t| format!(" {}", t)).unwrap_or_default();
         match self {
-            PrometheusValue::Unknown(n) | PrometheusValue::Gauge(n) => write!(
+            PrometheusValue::Unknown(n) | PrometheusValue::Gauge(n) => writeln!(
                 f,
-                "{}{} {}{}\n",
+                "{}{} {}{}",
                 metric_name,
                 render_label_values(label_names, label_values),
                 n,
@@ -749,12 +747,12 @@ where
     ValueType: RenderableMetricValue,
 {
     pub fn new(label_values: Vec<String>, timestamp: Option<Timestamp>, value: ValueType) -> Self {
-        return Self {
+        Self {
             label_values,
             timestamp,
             value,
             label_names: None,
-        };
+        }
     }
 
     fn set_label_names(&mut self, label_names: Arc<Vec<String>>) {
@@ -766,9 +764,7 @@ where
             return LabelSet::new(label_names.clone(), self);
         }
 
-        Err(ParseError::InvalidMetric(format!(
-            "Metric has not been bound to a family yet, and thus doesn't have label names"
-        )))
+        Err(ParseError::InvalidMetric("Metric has not been bound to a family yet, and thus doesn't have label names".to_string()))
     }
 
     fn render(
@@ -891,18 +887,18 @@ impl<'a> LabelSet<'a> {
             )));
         }
 
-        return Ok(Self {
+        Ok(Self {
             label_names,
             label_values: &sample.label_values,
-        });
+        })
     }
 
     pub fn matches_sample<ValueType>(&self, sample: &Sample<ValueType>) -> bool {
-        return self.matches_values(&sample.label_values);
+        self.matches_values(&sample.label_values)
     }
 
-    pub fn matches_values(&self, label_values: &Vec<String>) -> bool {
-        return self.label_values == label_values;
+    pub fn matches_values(&self, label_values: &[String]) -> bool {
+        self.label_values == label_values
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&String, &String)> {
@@ -910,11 +906,11 @@ impl<'a> LabelSet<'a> {
     }
 
     pub fn iter_names(&self) -> impl Iterator<Item = &String> {
-        return self.label_names.iter();
+        self.label_names.iter()
     }
 
     pub fn iter_values(&self) -> impl Iterator<Item = &String> {
-        return self.label_values.iter();
+        self.label_values.iter()
     }
 
     pub fn get_label_value(&self, label_name: &str) -> Option<&str> {

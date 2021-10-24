@@ -922,7 +922,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                     let name = &metric_name.to_owned();
                     self.try_set_label_names(
                         name,
-                        LabelNames::new(name, metric_type.clone(), actual_label_names),
+                        LabelNames::new(name, metric_type, actual_label_names),
                     )?;
 
                     let metric_name = metric_name.trim_end_matches(suffix);
