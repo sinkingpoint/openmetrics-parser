@@ -16,7 +16,7 @@ metrictype = { kw_counter | kw_gauge | kw_histogram | kw_summary }
 COMMENT = _{ hash ~ sp ~ !(kw_help | kw_type) ~ commentchar+ ~ NEWLINE }
 
 exposition = { SOI ~ metricset ~ NEWLINE? ~ EOI }
-metricset = _{ (metricfamily ~ NEWLINE*)+ }
+metricset = _{ (NEWLINE* ~ metricfamily)+ }
 metricfamily = { (metricdescriptor* ~ metric+) | (metricdescriptor+ ~ metric*) }
 
 metricdescriptor = ${

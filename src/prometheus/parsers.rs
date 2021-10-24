@@ -24,6 +24,13 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<PrometheusType> {
     type Error = ParseError;
 
     fn validate(&self) -> Result<(), ParseError> {
+        if let Some(name) = &self.name {
+            // Counters have to end with _total
+            if self.family_type == Some(PrometheusType::Counter) && !name.ends_with("_total") {
+                return Err(ParseError::InvalidMetric(format!("Counters should have a _total suffix. Got {}", name)));
+            }
+        }
+
         for metric in self.metrics.iter() {
             metric.validate(self)?;
         }

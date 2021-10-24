@@ -283,7 +283,7 @@ where
             metric.render(f, &self.family_name, &label_names)?;
         }
 
-        f.write_char('\n')
+        Ok(())
     }
 }
 
@@ -299,8 +299,11 @@ where
     ValueType: RenderableMetricValue,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for (_, family) in self.families.iter() {
-            writeln!(f, "{}", family)?;
+        for (i, (_, family)) in self.families.iter().enumerate() {
+            write!(f, "{}", family)?;
+            if i != self.families.len()-1 {
+                write!(f, "\n")?;
+            }
         }
 
         Ok(())
