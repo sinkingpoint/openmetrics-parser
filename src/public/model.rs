@@ -262,7 +262,7 @@ where
 impl<TypeSet, ValueType> fmt::Display for MetricFamily<TypeSet, ValueType>
 where
     TypeSet: fmt::Display + Default + PartialEq,
-    ValueType: RenderableMetricValue,
+    ValueType: RenderableMetricValue + Clone,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if !self.help.is_empty() {
@@ -296,7 +296,7 @@ pub struct MetricsExposition<TypeSet, ValueType> {
 impl<TypeSet, ValueType> fmt::Display for MetricsExposition<TypeSet, ValueType>
 where
     TypeSet: fmt::Display + Default + PartialEq,
-    ValueType: RenderableMetricValue,
+    ValueType: RenderableMetricValue + Clone,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (i, (_, family)) in self.families.iter().enumerate() {
@@ -767,7 +767,7 @@ pub struct Sample<ValueType> {
 
 impl<ValueType> Sample<ValueType>
 where
-    ValueType: RenderableMetricValue,
+    ValueType: RenderableMetricValue + Clone,
 {
     pub fn new(label_values: Vec<String>, timestamp: Option<Timestamp>, value: ValueType) -> Self {
         Self {
@@ -780,6 +780,21 @@ where
 
     fn set_label_names(&mut self, label_names: Arc<Vec<String>>) {
         self.label_names = Some(label_names);
+    }
+
+    pub fn without_label(&self, label_name: &str) -> Result<Self, ParseError> {
+        if let Some(labels) = &self.label_names {
+            if let Some(idx) = labels.iter().position(|name| name == label_name) {
+                let mut label_values = self.label_values.clone();
+                label_values.remove(idx);
+
+                return Ok(Self::new(label_values, self.timestamp.clone(), self.value.clone()));
+            }
+
+            return Err(ParseError::InvalidMetric(format!("Label {} doesn't existin in metric", label_name)));
+        }
+
+        return Err(ParseError::InvalidMetric(format!("Metric isn't bound to a family, so doesn't have names")));
     }
 
     pub fn get_labelset(&self) -> Result<LabelSet, ParseError> {
