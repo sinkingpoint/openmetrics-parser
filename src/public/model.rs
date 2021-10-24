@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::{self, Write}};
+use std::{collections::HashMap, fmt::{self, Write}, sync::Arc};
 
 use auto_ops::impl_op_ex;
 
@@ -49,21 +49,21 @@ impl fmt::Display for Exemplar {
 /// https://github.com/OpenObservability/OpenMetrics/blob/main/specification/OpenMetrics.md#metricfamily
 /// A MetricFamily MAY have zero or more Metrics. A MetricFamily MUST have a name, HELP, TYPE, and UNIT metadata.
 /// Every Metric within a MetricFamily MUST have a unique LabelSet.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct MetricFamily<TypeSet, ValueType> {
     pub family_name: String,
-    label_names: Vec<String>,
+    label_names: Arc<Vec<String>>,
     pub family_type: TypeSet,
     pub help: String,
     pub unit: String,
     metrics: Vec<Sample<ValueType>>,
 }
 
-impl<TypeSet, ValueType> MetricFamily<TypeSet, ValueType> {
+impl<TypeSet, ValueType> MetricFamily<TypeSet, ValueType> where TypeSet: Clone, ValueType: RenderableMetricValue + Clone {
     pub fn new(family_name: String, label_names: Vec<String>, family_type: TypeSet, help: String, unit: String) -> Self {
         return Self {
             family_name,
-            label_names,
+            label_names: Arc::new(label_names),
             family_type,
             help,
             unit,
@@ -71,20 +71,24 @@ impl<TypeSet, ValueType> MetricFamily<TypeSet, ValueType> {
         }
     }
 
-    pub fn remove_label(&mut self, label_name: &str) {
-        let idx = match self.label_names.iter().position(|s| s == label_name) {
-            Some(i) => i,
-            None => return
-        };
+    pub fn without_label(&self, label_name: &str) -> Result<Self, ParseError> {
+        match self.label_names.iter().position(|n| n == label_name) {
+            Some(idx) => {
+                let mut label_names = self.label_names.as_ref().clone();
+                label_names.remove(idx);
+                let mut base = Self::new(self.family_name.clone(), label_names, self.family_type.clone(), self.help.clone(), self.unit.clone());
 
-        self.label_names.remove(idx);
-        for metric in self.metrics.iter_mut() {
-            metric.label_values.remove(idx);
+                for sample in self.metrics.iter() {
+                    let mut label_values = sample.label_values.clone();
+                    label_values.remove(idx);
+                    let new_sample = Sample::new(label_values, sample.timestamp.clone(), sample.value.clone());
+                    base.add_sample(new_sample)?;
+                }
+
+                Ok(base)
+            }
+            None => Err(ParseError::InvalidMetric(format!("No label `{}` in metric family", label_name)))
         }
-    }
-
-    pub fn iter_samples_with_labels<'a>(&'a self) -> impl Iterator<Item=(&'a Sample<ValueType>, LabelSet<'a>)> {
-        return self.metrics.iter().map(move |m| (m, LabelSet::new(&self, m).expect("Samples directly from a family have already been sanity checked")))
     }
 
     pub fn into_iter_samples(self) -> impl Iterator<Item=Sample<ValueType>> {
@@ -131,16 +135,11 @@ impl<TypeSet, ValueType> MetricFamily<TypeSet, ValueType> {
         return self.metrics.iter_mut().find(|s| labelset.matches_sample(s))
     }
 
-    pub fn get_labelset_for<'a>(&'a self, sample: &'a Sample<ValueType>) -> Result<LabelSet<'a>, ParseError> {
-        return LabelSet::new(self, sample);
-    }
-
-    pub fn set_label(&mut self, label_name: &str, label_value: &str) {
+    pub fn set_label(&mut self, label_name: &str, label_value: &str) -> Result<(), ParseError> {
         let index = match self.label_names.iter().position(|s| s == label_name) {
             Some(position) => position,
             None => {
-                self.label_names.push(label_name.to_owned());
-                self.label_names.len() - 1
+                return Err(ParseError::ParseError(format!("No Label {} on Metric Family", label_name)));
             },
         };
 
@@ -152,9 +151,11 @@ impl<TypeSet, ValueType> MetricFamily<TypeSet, ValueType> {
                 metric.label_values[index] = label_value.to_owned();
             }
         }
+
+        Ok(())
     }
 
-    pub fn add_sample(&mut self, s: Sample<ValueType>) -> Result<(), ParseError> {
+    pub fn add_sample(&mut self, mut s: Sample<ValueType>) -> Result<(), ParseError> {
         if s.label_values.len() != self.label_names.len() {
             return Err(ParseError::InvalidMetric(format!("Cannot add a sample with {} labels into a family with {}", s.label_values.len(), self.label_names.len())));
         }
@@ -163,6 +164,7 @@ impl<TypeSet, ValueType> MetricFamily<TypeSet, ValueType> {
             return Err(ParseError::InvalidMetric(format!("Cannot add a duplicate metric to a MetricFamily (Label Values: {:?})", s.label_values)));
         }
 
+        s.set_label_names(self.label_names.clone());
         self.metrics.push(s);
 
         return Ok(());
@@ -223,7 +225,7 @@ impl<TypeSet, ValueType> MetricsExposition<TypeSet, ValueType> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CounterValue {
     pub value: MetricNumber,
     pub created: Option<Timestamp>,
@@ -264,7 +266,7 @@ impl RenderableMetricValue for HistogramBucket {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct HistogramValue {
     pub sum: Option<MetricNumber>,
     pub count: Option<u64>,
@@ -296,13 +298,13 @@ impl RenderableMetricValue for HistogramValue {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct State {
     pub name: String,
     pub enabled: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Quantile {
     pub quantile: f64,
     pub value: MetricNumber,
@@ -327,7 +329,7 @@ impl RenderableMetricValue for Quantile {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct SummaryValue {
     pub sum: Option<MetricNumber>,
     pub count: Option<u64>,
@@ -448,7 +450,7 @@ pub enum OpenMetricsType {
     Unknown,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum OpenMetricsValue {
     Unknown(MetricNumber),
     Gauge(MetricNumber),
@@ -516,7 +518,7 @@ pub struct PrometheusCounterValue {
     pub exemplar: Option<Exemplar>
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PrometheusValue {
     Unknown(MetricNumber),
     Gauge(MetricNumber),
@@ -550,6 +552,7 @@ impl RenderableMetricValue for PrometheusValue {
 
 #[derive(Debug)]
 pub struct Sample<ValueType> {
+    label_names: Option<Arc<Vec<String>>>,
     label_values: Vec<String>,
     pub timestamp: Option<Timestamp>,
     pub value: ValueType,
@@ -560,8 +563,21 @@ impl<ValueType> Sample<ValueType> where ValueType: RenderableMetricValue {
         return Self {
             label_values,
             timestamp,
-            value
+            value,
+            label_names: None,
         }
+    }
+
+    fn set_label_names(&mut self, label_names: Arc<Vec<String>>) {
+        self.label_names = Some(label_names);
+    }
+
+    pub fn get_labelset(&self) -> Result<LabelSet, ParseError> {
+        if let Some(label_names) = &self.label_names {
+            return LabelSet::new(label_names.clone(), self);
+        }
+
+        Err(ParseError::InvalidMetric(format!("Metric has not been bound to a family yet, and thus doesn't have label names")))
     }
 
     fn render(&self, f: &mut fmt::Formatter<'_>, metric_name: &str, label_names: &[&str]) -> fmt::Result {
@@ -656,18 +672,18 @@ impl fmt::Display for ParseError {
 }
 
 pub struct LabelSet<'a> {
-    label_names: &'a [String],
+    label_names: Arc<Vec<String>>,
     label_values: &'a [String]
 }
 
 impl<'a> LabelSet<'a> {
-    pub fn new<TypeSet, ValueType>(family: &'a MetricFamily<TypeSet, ValueType>, sample: &'a Sample<ValueType>) -> Result<Self, ParseError> {
-        if family.label_names.len() != sample.label_values.len() {
-            return Err(ParseError::InvalidMetric(format!("Cannot create labelset from family with {} labels and sample with {}", family.label_names.len(), sample.label_values.len())));
+    pub fn new<ValueType>(label_names: Arc<Vec<String>>, sample: &'a Sample<ValueType>) -> Result<Self, ParseError> {
+        if label_names.len() != sample.label_values.len() {
+            return Err(ParseError::InvalidMetric(format!("Cannot create labelset from family with {} labels and sample with {}", label_names.len(), sample.label_values.len())));
         }
 
         return Ok(Self {
-            label_names: &family.label_names,
+            label_names,
             label_values: &sample.label_values
         })
     }
