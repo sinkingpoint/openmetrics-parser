@@ -17,7 +17,7 @@ pub type Timestamp = f64;
 /// The combined length of the label names and values of an Exemplar's LabelSet MUST NOT exceed 128 UTF-8 characters.
 /// Other characters in the text rendering of an exemplar such as ",= are not included in this limit for implementation
 /// simplicity and for consistency between the text and proto formats.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Exemplar {
     pub labels: HashMap<String, String>,
     pub timestamp: Option<f64>,
@@ -321,14 +321,14 @@ impl<TypeSet, ValueType> MetricsExposition<TypeSet, ValueType> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CounterValue {
     pub value: MetricNumber,
     pub created: Option<Timestamp>,
     pub exemplar: Option<Exemplar>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct HistogramBucket {
     pub count: MetricNumber,
     pub upper_bound: f64,
@@ -375,7 +375,7 @@ impl RenderableMetricValue for HistogramBucket {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct HistogramValue {
     pub sum: Option<MetricNumber>,
     pub count: Option<u64>,
@@ -420,7 +420,7 @@ pub struct State {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Quantile {
     pub quantile: f64,
     pub value: MetricNumber,
@@ -458,7 +458,7 @@ impl RenderableMetricValue for Quantile {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct SummaryValue {
     pub sum: Option<MetricNumber>,
     pub count: Option<u64>,
@@ -678,13 +678,13 @@ impl fmt::Display for PrometheusType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PrometheusCounterValue {
     pub value: MetricNumber,
     pub exemplar: Option<Exemplar>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum PrometheusValue {
     Unknown(MetricNumber),
     Gauge(MetricNumber),
