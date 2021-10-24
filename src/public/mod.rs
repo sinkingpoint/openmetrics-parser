@@ -1,6 +1,6 @@
 mod model;
-mod types;
 mod tests;
+mod types;
 
 pub use model::*;
 pub use types::*;

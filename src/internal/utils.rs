@@ -1,5 +1,8 @@
 fn escape_str(s: &str) -> String {
-    return s.replace("\\", "\\\\").replace("\n", "\\n").replace("\"", "\\\"");
+    return s
+        .replace("\\", "\\\\")
+        .replace("\n", "\\n")
+        .replace("\"", "\\\"");
 }
 
 pub fn render_label_values(label_names: &[&str], label_values: &[&str]) -> String {

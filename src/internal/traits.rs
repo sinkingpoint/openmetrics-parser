@@ -27,10 +27,20 @@ pub trait MarshalledMetricFamily {
     fn validate(&self) -> Result<(), ParseError>;
 }
 
-pub trait MarshalledMetric<T> where T: MetricsType {
+pub trait MarshalledMetric<T>
+where
+    T: MetricsType,
+{
     fn validate(&self, family: &MetricFamilyMarshal<T>) -> Result<(), ParseError>;
 }
 
 pub trait RenderableMetricValue {
-    fn render(&self, f: &mut fmt::Formatter<'_>, metric_name: &str, timestamp: Option<&Timestamp>, label_names: &[&str], label_values: &[&str]) -> fmt::Result;
+    fn render(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+        metric_name: &str,
+        timestamp: Option<&Timestamp>,
+        label_names: &[&str],
+        label_values: &[&str],
+    ) -> fmt::Result;
 }

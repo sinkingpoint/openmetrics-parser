@@ -1,5 +1,11 @@
-use crate::{internal::{CounterValueMarshal, LabelNames, MarshalledMetric, MarshalledMetricFamily, MetricFamilyMarshal, MetricMarshal, MetricProcesser, MetricValueMarshal, MetricsType}, public::*};
-use std::{convert::TryFrom};
+use crate::{
+    internal::{
+        CounterValueMarshal, LabelNames, MarshalledMetric, MarshalledMetricFamily,
+        MetricFamilyMarshal, MetricMarshal, MetricProcesser, MetricValueMarshal, MetricsType,
+    },
+    public::*,
+};
+use std::convert::TryFrom;
 
 use pest::Parser;
 
@@ -112,11 +118,7 @@ impl Default for OpenMetricsType {
 
 impl From<MetricMarshal> for Sample<OpenMetricsValue> {
     fn from(s: MetricMarshal) -> Sample<OpenMetricsValue> {
-        Sample::new(
-            s.label_values,
-            s.timestamp,
-            s.value.into(),
-        )
+        Sample::new(s.label_values, s.timestamp, s.value.into())
     }
 }
 
@@ -204,7 +206,9 @@ impl MarshalledMetric<OpenMetricsType> for MetricMarshal {
             }
             MetricValueMarshal::Counter(counter_value) => {
                 if counter_value.value.is_none() {
-                    return Err(ParseError::InvalidMetric("Counter is missing a _total".to_string()));
+                    return Err(ParseError::InvalidMetric(
+                        "Counter is missing a _total".to_string(),
+                    ));
                 }
             }
             _ => {}
@@ -219,17 +223,23 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
 
     fn validate(&self) -> Result<(), ParseError> {
         if self.name.is_none() {
-            return Err(ParseError::InvalidMetric("Metric didn't have a name".to_string()));
+            return Err(ParseError::InvalidMetric(
+                "Metric didn't have a name".to_string(),
+            ));
         }
 
-        if self.family_type == Some(OpenMetricsType::StateSet) && self.label_names.is_some()
-                && !self
-                    .label_names
-                    .as_ref()
-                    .unwrap()
-                    .names
-                    .contains(self.name.as_ref().unwrap()) {
-            return Err(ParseError::InvalidMetric("Stateset must not have a label with the same name as its MetricFamily".to_string()));
+        if self.family_type == Some(OpenMetricsType::StateSet)
+            && self.label_names.is_some()
+            && !self
+                .label_names
+                .as_ref()
+                .unwrap()
+                .names
+                .contains(self.name.as_ref().unwrap())
+        {
+            return Err(ParseError::InvalidMetric(
+                "Stateset must not have a label with the same name as its MetricFamily".to_string(),
+            ));
         }
 
         for metric in self.metrics.iter() {
@@ -894,8 +904,14 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<OpenMetricsType> {
                     match &self.current_label_set {
                         None => self.current_label_set = Some(actual_label_values.clone()),
                         Some(s) => {
-                            if s != &actual_label_values && self.seen_label_sets.contains(&actual_label_values) {
-                                return Err(ParseError::InvalidMetric(format!("Interwoven labelsets: Found {:?} after {:?}", s, self.current_label_set.as_ref().unwrap())));
+                            if s != &actual_label_values
+                                && self.seen_label_sets.contains(&actual_label_values)
+                            {
+                                return Err(ParseError::InvalidMetric(format!(
+                                    "Interwoven labelsets: Found {:?} after {:?}",
+                                    s,
+                                    self.current_label_set.as_ref().unwrap()
+                                )));
                             }
                         }
                     }
@@ -984,7 +1000,9 @@ impl From<MetricFamilyMarshal<OpenMetricsType>>
             marshal.family_type.unwrap_or_default(),
             marshal.help.unwrap_or_default(),
             marshal.unit.unwrap_or_default(),
-        ).with_samples(marshal.metrics.into_iter().map(|m| m.into())).unwrap()
+        )
+        .with_samples(marshal.metrics.into_iter().map(|m| m.into()))
+        .unwrap()
     }
 }
 
@@ -1210,7 +1228,9 @@ pub fn parse_openmetrics(
                     )));
                 }
 
-                exposition.families.insert(family.family_name.clone(), family);
+                exposition
+                    .families
+                    .insert(family.family_name.clone(), family);
             }
             Rule::kw_eof => {
                 found_eof = true;

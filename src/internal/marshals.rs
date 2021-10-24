@@ -1,8 +1,11 @@
 use std::fmt;
 
-use crate::{CounterValue, Exemplar, HistogramValue, MetricNumber, ParseError, PrometheusCounterValue, SummaryValue, Timestamp};
+use crate::{
+    CounterValue, Exemplar, HistogramValue, MetricNumber, ParseError, PrometheusCounterValue,
+    SummaryValue, Timestamp,
+};
 
-use super::{MetricsType};
+use super::MetricsType;
 
 #[derive(Debug)]
 pub enum MetricValueMarshal {
@@ -57,7 +60,10 @@ where
     pub current_label_set: Option<Vec<String>>,
 }
 
-impl<T> MetricFamilyMarshal<T> where T: MetricsType + Clone + Default + fmt::Debug {
+impl<T> MetricFamilyMarshal<T>
+where
+    T: MetricsType + Clone + Default + fmt::Debug,
+{
     pub fn empty() -> MetricFamilyMarshal<T> {
         MetricFamilyMarshal {
             name: None,
@@ -67,7 +73,7 @@ impl<T> MetricFamilyMarshal<T> where T: MetricsType + Clone + Default + fmt::Deb
             unit: None,
             metrics: Vec::new(),
             seen_label_sets: Vec::new(),
-            current_label_set: None
+            current_label_set: None,
         }
     }
 
@@ -229,9 +235,7 @@ impl MetricMarshal {
     }
 }
 
-pub struct MetricProcesser(
-    pub Box<MetricProccessFunc>,
-);
+pub struct MetricProcesser(pub Box<MetricProccessFunc>);
 
 type MetricProccessFunc = dyn Fn(
     &mut MetricMarshal,

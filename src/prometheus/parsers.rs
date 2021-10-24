@@ -1,8 +1,14 @@
-use std::{convert::TryFrom};
+use std::convert::TryFrom;
 
 use pest::Parser;
 
-use crate::{internal::{CounterValueMarshal, LabelNames, MarshalledMetric, MarshalledMetricFamily, MetricFamilyMarshal, MetricMarshal, MetricProcesser, MetricValueMarshal, MetricsType}, public::*};
+use crate::{
+    internal::{
+        CounterValueMarshal, LabelNames, MarshalledMetric, MarshalledMetricFamily,
+        MetricFamilyMarshal, MetricMarshal, MetricProcesser, MetricValueMarshal, MetricsType,
+    },
+    public::*,
+};
 
 #[derive(Parser)]
 #[grammar = "prometheus/prometheus.pest"]
@@ -24,7 +30,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<PrometheusType> {
 
         Ok(())
     }
-    
+
     fn process_new_metric(
         &mut self,
         metric_name: &str,
@@ -541,11 +547,7 @@ impl Default for PrometheusType {
 
 impl From<MetricMarshal> for Sample<PrometheusValue> {
     fn from(s: MetricMarshal) -> Sample<PrometheusValue> {
-        Sample::new(
-            s.label_values,
-            s.timestamp,
-            s.value.into(),
-        )
+        Sample::new(s.label_values, s.timestamp, s.value.into())
     }
 }
 
@@ -695,7 +697,9 @@ impl From<MetricFamilyMarshal<PrometheusType>> for MetricFamily<PrometheusType, 
             marshal.family_type.unwrap_or_default(),
             marshal.help.unwrap_or_default(),
             marshal.unit.unwrap_or_default(),
-        ).with_samples(marshal.metrics.into_iter().map(|m| m.into())).unwrap()
+        )
+        .with_samples(marshal.metrics.into_iter().map(|m| m.into()))
+        .unwrap()
     }
 }
 
@@ -929,7 +933,9 @@ pub fn parse_prometheus(
                     )));
                 }
 
-                exposition.families.insert(family.family_name.clone(), family);
+                exposition
+                    .families
+                    .insert(family.family_name.clone(), family);
             }
             Rule::EOI => {}
             _ => unreachable!(),
