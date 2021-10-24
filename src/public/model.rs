@@ -83,6 +83,34 @@ where
         };
     }
 
+    pub fn with_labels<'a, T, S>(&self, labels: T) -> Result<Self, ParseError> where T: IntoIterator<Item=(&'a str, &'a str)> {
+        let mut label_names = self.label_names.as_ref().clone();
+        let mut samples = self.metrics.clone();
+        for (k, v) in labels {
+            match label_names.iter().position(|n| k == *n) {
+                Some(idx) => {
+                    for sample in samples.iter_mut() {
+                        sample.label_values[idx] = v.to_owned();
+                    }
+                },
+                None => {
+                    label_names.push(k.to_owned());
+                    for sample in samples.iter_mut() {
+                        sample.label_values.push(v.to_owned());
+                    }
+                }
+            }
+        }
+
+        Ok(Self::new(
+            self.family_name.clone(),
+            label_names,
+            self.family_type.clone(),
+            self.help.clone(),
+            self.unit.clone(),
+        ).with_samples(samples)?)
+    }
+
     pub fn without_label(&self, label_name: &str) -> Result<Self, ParseError> {
         match self.label_names.iter().position(|n| n == label_name) {
             Some(idx) => {
@@ -708,7 +736,7 @@ impl RenderableMetricValue for PrometheusValue {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Sample<ValueType> {
     label_names: Option<Arc<Vec<String>>>,
     label_values: Vec<String>,
