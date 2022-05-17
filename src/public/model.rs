@@ -83,6 +83,21 @@ where
         }
     }
 
+    pub fn clone_and_convert_type<T: RenderableMetricValue + Clone>(&self) -> MetricFamily<TypeSet, T> where T: From<ValueType> {
+        MetricFamily {
+            family_name: self.family_name.clone(),
+            label_names: Arc::new((*self.label_names).clone()),
+            family_type: self.family_type.clone(),
+            help: self.help.clone(),
+            unit: self.unit.clone(),
+            metrics: self
+                .metrics
+                .iter()
+                .map(|m| m.clone_with_new_value(m.value.clone().into()))
+                .collect(),
+        }
+    }
+
     pub fn with_labels<'a, T>(&self, labels: T) -> Self
     where
         T: IntoIterator<Item = (&'a str, &'a str)>,
@@ -775,6 +790,15 @@ where
             timestamp,
             value,
             label_names: None,
+        }
+    }
+
+    fn clone_with_new_value<T>(&self, value: T) -> Sample<T> where T: RenderableMetricValue + Clone {
+        return Sample {
+            label_names: self.label_names.clone(),
+            label_values: self.label_values.clone(),
+            timestamp: self.timestamp.clone(),
+            value,
         }
     }
 
