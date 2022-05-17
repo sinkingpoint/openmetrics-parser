@@ -10,3 +10,4 @@ pub mod openmetrics;
 pub mod prometheus;
 mod public;
 pub use public::*;
+pub use internal::RenderableMetricValue;
