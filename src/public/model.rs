@@ -890,12 +890,26 @@ impl_op_ex!(+ |a: &MetricNumber, b: &MetricNumber| -> MetricNumber {
     }
 });
 
+impl_op_ex!(+= |a: &mut MetricNumber, b: &MetricNumber| {
+    match a {
+        MetricNumber::Float(f) => *f += b.as_f64(),
+        MetricNumber::Int(i) => *i += b.as_i64().unwrap(),
+    }
+});
+
 impl_op_ex!(-|a: &MetricNumber, b: &MetricNumber| -> MetricNumber {
     match (a, b) {
         (MetricNumber::Float(f), MetricNumber::Float(f2)) => MetricNumber::Float(f - f2),
         (MetricNumber::Float(f), MetricNumber::Int(i)) => MetricNumber::Float(f - *i as f64),
         (MetricNumber::Int(i), MetricNumber::Float(f)) => MetricNumber::Float(f - *i as f64),
         (MetricNumber::Int(i), MetricNumber::Int(i2)) => MetricNumber::Int(i - i2),
+    }
+});
+
+impl_op_ex!(-= |a: &mut MetricNumber, b: &MetricNumber| {
+    match a {
+        MetricNumber::Float(f) => *f -= b.as_f64(),
+        MetricNumber::Int(i) => *i -= b.as_i64().unwrap(),
     }
 });
 
@@ -908,12 +922,26 @@ impl_op_ex!(*|a: &MetricNumber, b: &MetricNumber| -> MetricNumber {
     }
 });
 
+impl_op_ex!(*= |a: &mut MetricNumber, b: &MetricNumber| {
+    match a {
+        MetricNumber::Float(f) => *f *= b.as_f64(),
+        MetricNumber::Int(i) => *i *= b.as_i64().unwrap(),
+    }
+});
+
 impl_op_ex!(/ |a: &MetricNumber, b: &MetricNumber| -> MetricNumber {
     match (a, b) {
         (MetricNumber::Float(f), MetricNumber::Float(f2)) => MetricNumber::Float(f / f2),
         (MetricNumber::Float(f), MetricNumber::Int(i)) => MetricNumber::Float(f / *i as f64),
         (MetricNumber::Int(i), MetricNumber::Float(f)) => MetricNumber::Float(f / *i as f64),
         (MetricNumber::Int(i), MetricNumber::Int(i2)) => MetricNumber::Int(i / i2),
+    }
+});
+
+impl_op_ex!(/= |a: &mut MetricNumber, b: &MetricNumber| {
+    match a {
+        MetricNumber::Float(f) => *f /= b.as_f64(),
+        MetricNumber::Int(i) => *i /= b.as_i64().unwrap(),
     }
 });
 
