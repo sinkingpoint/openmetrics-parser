@@ -71,4 +71,9 @@ fn test_render() {
     let exposition = parse_prometheus(test_str).unwrap();
     let exposition_str = exposition.to_string();
     assert!(parse_prometheus(&exposition_str).is_ok());
+
+    let test_str = include_str!("../prometheus/testdata/gravelgateway#5.txt");
+    let exposition = parse_prometheus(test_str).unwrap();
+    let exposition_str = exposition.to_string();
+    assert!(parse_prometheus(&exposition_str).is_ok());
 }

@@ -13,9 +13,10 @@ kw_histogram = { "histogram" }
 kw_summary = { "summary" }
 commentchar = _{ !NEWLINE ~ ANY }
 metrictype = { kw_counter | kw_gauge | kw_histogram | kw_summary }
-COMMENT = _{ hash ~ sp ~ !(kw_help | kw_type) ~ commentchar+ ~ NEWLINE }
+COMMENT = _{ hash ~ sp ~ !(kw_help | kw_type) ~ commentchar+ ~ NEWLINE? }
 
-exposition = { SOI ~ metricset ~ NEWLINE? ~ EOI }
+exposition = { SOI ~ metricset ~ end_errata? ~ EOI }
+end_errata = _{ (NEWLINE | COMMENT)* }
 metricset = _{ (NEWLINE* ~ metricfamily)+ }
 metricfamily = { (metricdescriptor* ~ metric+) | (metricdescriptor+ ~ metric*) }
 
@@ -26,7 +27,7 @@ metricdescriptor = ${
 exemplar = ${ sp ~ hash ~ sp ~ labels ~ sp ~ number ~ (sp ~ timestamp)? }
 metric = ${ metricname ~ labels? ~ sp+ ~ number ~ (sp ~ timestamp)? ~ exemplar? ~ NEWLINE }
 
-labels = { "{" ~ (label ~ (comma ~ label)*)? ~ "}" }
+labels = { "{" ~ (label ~ (comma ~ label)*)? ~ ","? ~ "}" }
 label = { labelname ~ eq ~ dquote ~ escapedstring ~ dquote }
 labelname = @{ labelname_initialchar ~ labelname_char* }
 labelname_char = _{ labelname_initialchar | ASCII_DIGIT }
@@ -37,7 +38,7 @@ metricnamechar = _{ ASCII_ALPHA_LOWER | ASCII_DIGIT | "_" }
 
 number = @{ realnumber | sign ~ (^"inf" | ^"infinity") | ^"nan" }
 timestamp = @{ realnumber }
-realnumber = @{ sign? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)? ~ ("e" ~ sign? ~ ASCII_DIGIT+)? | sign? ~ ASCII_DIGIT+ }
+realnumber = @{ sign? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)? ~ (("e" | "E") ~ sign? ~ ASCII_DIGIT+)? | sign? ~ ASCII_DIGIT+ }
 escapedstring = { escapedchar* }
 escapedchar = _{ normalchar | bs ~ (bs | "n" | dquote)}
 normalchar = _{ !(bs | NEWLINE | dquote) ~ ANY }
