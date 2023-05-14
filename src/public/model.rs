@@ -83,6 +83,10 @@ where
         }
     }
 
+    pub fn get_label_names(&self) -> &[String] {
+        return self.label_names.as_ref().as_slice();
+    }
+
     pub fn clone_and_convert_type<T: RenderableMetricValue + Clone>(&self) -> MetricFamily<TypeSet, T> where T: From<ValueType> {
         MetricFamily {
             family_name: self.family_name.clone(),
