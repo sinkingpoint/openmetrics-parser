@@ -18,7 +18,7 @@ COMMENT = _{ hash ~ sp ~ !(kw_help | kw_type) ~ commentchar+ ~ NEWLINE? }
 exposition = { SOI ~ metricset ~ end_errata? ~ EOI }
 end_errata = _{ (NEWLINE | COMMENT)* }
 metricset = _{ (NEWLINE* ~ metricfamily)+ }
-metricfamily = { (metricdescriptor* ~ metric+) | (metricdescriptor+ ~ metric*) }
+metricfamily = { (metricdescriptor{1, 2} ~ metric*) |  metric+ }
 
 metricdescriptor = ${
     hash ~ sp ~ kw_help ~ sp ~ metricname ~ sp ~ escapedstring ~ NEWLINE |

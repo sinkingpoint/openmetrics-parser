@@ -1,0 +1,8 @@
+# HELP metric_without_values_total This metric does not always have values
+# TYPE metric_without_values_total counter
+# HELP metric_with_values_total This metric will always have values
+# TYPE metric_with_values_total counter
+metric_with_values_total{a_label="label_value",another_label="a_value"} 1.0
+# HELP metric_with_values_created This metric will always have values
+# TYPE metric_with_values_created gauge
+metric_with_values_created{a_label="label_value",another_label="a_value"} 1.665577650707084e+09
