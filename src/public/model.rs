@@ -109,16 +109,16 @@ where
         let mut label_names = self.label_names.as_ref().clone();
         let mut samples = self.metrics.clone();
         for (k, v) in labels {
-            match label_names.iter().position(|n| k == *n) {
-                Some(idx) => {
+            match label_names.binary_search(&k.to_owned() ) {
+                Ok(idx) => {
                     for sample in samples.iter_mut() {
                         sample.label_values[idx] = v.to_owned();
                     }
                 }
-                None => {
-                    label_names.push(k.to_owned());
+                Err(idx) => {
+                    label_names.insert(idx, k.to_owned());
                     for sample in samples.iter_mut() {
-                        sample.label_values.push(v.to_owned());
+                        sample.label_values.insert(idx,v.to_owned());
                     }
                 }
             }
