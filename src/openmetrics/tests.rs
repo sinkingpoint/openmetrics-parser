@@ -6,9 +6,6 @@ use std::{
 
 #[derive(Deserialize, Debug)]
 struct TestMeta {
-    #[serde(alias = "type")]
-    exposition_format: String,
-    file: String,
     #[serde(alias = "shouldParse")]
     should_parse: bool,
 }

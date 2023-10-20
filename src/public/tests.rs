@@ -77,3 +77,159 @@ fn test_render() {
     let exposition_str = exposition.to_string();
     assert!(parse_prometheus(&exposition_str).is_ok());
 }
+
+#[test]
+fn test_metric_number_operations() {
+    use crate::MetricNumber;
+
+    let a = MetricNumber::Int(1);
+    let b = MetricNumber::Int(2);
+    let c = MetricNumber::Float(0.5);
+    let d = MetricNumber::Float(1.5);
+
+    assert_eq!(a + b, MetricNumber::Int(3));
+    assert_eq!(a + c, MetricNumber::Float(1.5));
+    assert_eq!(a + d, MetricNumber::Float(2.5));
+    assert_eq!(b + c, MetricNumber::Float(2.5));
+    assert_eq!(b + d, MetricNumber::Float(3.5));
+    assert_eq!(c + d, MetricNumber::Float(2.0));
+
+    assert_eq!(a - b, MetricNumber::Int(-1));
+    assert_eq!(a - c, MetricNumber::Float(0.5));
+    assert_eq!(a - d, MetricNumber::Float(-0.5));
+    assert_eq!(b - c, MetricNumber::Float(1.5));
+    assert_eq!(b - d, MetricNumber::Float(0.5));
+    assert_eq!(c - d, MetricNumber::Float(-1.0));
+
+    assert_eq!(a * b, MetricNumber::Int(2));
+    assert_eq!(a * c, MetricNumber::Float(0.5));
+    assert_eq!(a * d, MetricNumber::Float(1.5));
+    assert_eq!(b * c, MetricNumber::Float(1.0));
+    assert_eq!(b * d, MetricNumber::Float(3.0));
+    assert_eq!(c * d, MetricNumber::Float(0.75));
+
+    assert_eq!(a / b, MetricNumber::Int(0));
+    assert_eq!(a / c, MetricNumber::Float(2.0));
+    assert_eq!(a / d, MetricNumber::Float(2.0 / 3.0));
+    assert_eq!(b / c, MetricNumber::Float(4.0));
+    assert_eq!(b / d, MetricNumber::Float(4.0 / 3.0));
+    assert_eq!(c / d, MetricNumber::Float(1.0 / 3.0));
+
+    {
+        let mut a = MetricNumber::Int(1);
+        a += b;
+        assert_eq!(a, MetricNumber::Int(3));
+    }
+    {
+        let mut a = MetricNumber::Int(1);
+        a += c;
+        assert_eq!(a, MetricNumber::Float(1.5));
+    }
+    {
+        let mut a = MetricNumber::Int(1);
+        a += d;
+        assert_eq!(a, MetricNumber::Float(2.5));
+    }
+    {
+        let mut a = MetricNumber::Float(0.5);
+        a += b;
+        assert_eq!(a, MetricNumber::Float(2.5));
+    }
+    {
+        let mut a = MetricNumber::Float(0.5);
+        a += c;
+        assert_eq!(a, MetricNumber::Float(1.0));
+    }
+    {
+        let mut a = MetricNumber::Float(0.5);
+        a += d;
+        assert_eq!(a, MetricNumber::Float(2.0));
+    }
+
+    {
+        let mut a = MetricNumber::Int(1);
+        a -= b;
+        assert_eq!(a, MetricNumber::Int(-1));
+    }
+    {
+        let mut a = MetricNumber::Int(1);
+        a -= c;
+        assert_eq!(a, MetricNumber::Float(0.5));
+    }
+    {
+        let mut a = MetricNumber::Int(1);
+        a -= d;
+        assert_eq!(a, MetricNumber::Float(-0.5));
+    }
+    {
+        let mut a = MetricNumber::Float(0.5);
+        a -= b;
+        assert_eq!(a, MetricNumber::Float(-1.5));
+    }
+    {
+        let mut a = MetricNumber::Float(0.5);
+        a -= c;
+    }
+
+    {
+        let mut a = MetricNumber::Int(1);
+        a *= b;
+        assert_eq!(a, MetricNumber::Int(2));
+    }
+    {
+        let mut a = MetricNumber::Int(1);
+        a *= c;
+        assert_eq!(a, MetricNumber::Float(0.5));
+    }
+    {
+        let mut a = MetricNumber::Int(1);
+        a *= d;
+        assert_eq!(a, MetricNumber::Float(1.5));
+    }
+    {
+        let mut a = MetricNumber::Float(0.5);
+        a *= b;
+        assert_eq!(a, MetricNumber::Float(1.0));
+    }
+    {
+        let mut a = MetricNumber::Float(0.5);
+        a *= c;
+        assert_eq!(a, MetricNumber::Float(0.25));
+    }
+    {
+        let mut a = MetricNumber::Float(0.5);
+        a *= d;
+        assert_eq!(a, MetricNumber::Float(0.75));
+    }
+
+    {
+        let mut a = MetricNumber::Int(1);
+        a /= b;
+        assert_eq!(a, MetricNumber::Int(0));
+    }
+    {
+        let mut a = MetricNumber::Int(1);
+        a /= c;
+        assert_eq!(a, MetricNumber::Float(2.0));
+    }
+    {
+        let mut a = MetricNumber::Int(1);
+        a /= d;
+        assert_eq!(a, MetricNumber::Float(2.0 / 3.0));
+    }
+    {
+        let mut a = MetricNumber::Float(0.5);
+        a /= b;
+        assert_eq!(a, MetricNumber::Float(0.25));
+    }
+    {
+        let mut a = MetricNumber::Float(0.5);
+        a /= c;
+        assert_eq!(a, MetricNumber::Float(1.0));
+    }
+    {
+        let mut a = MetricNumber::Float(0.5);
+        a /= d;
+        assert_eq!(a, MetricNumber::Float(1.0 / 3.0));
+    }
+}
