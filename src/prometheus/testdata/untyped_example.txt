@@ -1,0 +1,5 @@
+# This test case was pulled from the Prometheus Node Exporter, version 1.7.0 
+
+# HELP node_vmstat_pgfault /proc/vmstat information field pgfault.
+# TYPE node_vmstat_pgfault untyped
+node_vmstat_pgfault 1.131748065e+09
