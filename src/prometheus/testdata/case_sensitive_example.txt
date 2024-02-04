@@ -1,0 +1,5 @@
+# This test case was pulled from the Prometheus Node Exporter, version 1.7.0
+
+# HELP node_memory_Active_anon_bytes Memory information field Active_anon_bytes.
+# TYPE node_memory_Active_anon_bytes gauge
+node_memory_Active_anon_bytes 7.9376384e+07
