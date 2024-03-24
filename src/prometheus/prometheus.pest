@@ -11,8 +11,9 @@ kw_counter = { "counter" }
 kw_gauge = { "gauge" }
 kw_histogram = { "histogram" }
 kw_summary = { "summary" }
+kw_untyped = { "untyped" }
 commentchar = _{ !NEWLINE ~ ANY }
-metrictype = { kw_counter | kw_gauge | kw_histogram | kw_summary }
+metrictype = { kw_counter | kw_gauge | kw_histogram | kw_summary | kw_untyped }
 COMMENT = _{ hash ~ sp ~ !(kw_help | kw_type) ~ commentchar+ ~ NEWLINE? }
 
 exposition = { SOI ~ metricset ~ end_errata? ~ EOI }

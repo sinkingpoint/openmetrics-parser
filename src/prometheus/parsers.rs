@@ -719,7 +719,7 @@ impl TryFrom<&str> for PrometheusType {
             "gauge" => Ok(PrometheusType::Gauge),
             "histogram" => Ok(PrometheusType::Histogram),
             "summary" => Ok(PrometheusType::Summary),
-            "unknown" => Ok(PrometheusType::Unknown),
+            "untyped" => Ok(PrometheusType::Unknown),
             _ => Err(ParseError::InvalidMetric(format!(
                 "Invalid metric type: {}",
                 value
