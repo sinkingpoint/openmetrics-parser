@@ -1,4 +1,3 @@
-use crate::prometheus::parse_prometheus;
 
 #[test]
 fn test_label_sets() {
@@ -67,6 +66,7 @@ fn test_label_sets() {
 
 #[test]
 fn test_render() {
+    use crate::prometheus::parse_prometheus;
     let test_str = include_str!("../prometheus/testdata/upstream_example.txt");
     let exposition = parse_prometheus(test_str).unwrap();
     let exposition_str = exposition.to_string();

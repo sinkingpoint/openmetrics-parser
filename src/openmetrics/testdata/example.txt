@@ -1,0 +1,8 @@
+# TYPE go_goroutines gauge
+# HELP go_goroutines Number of goroutines that currently exist.
+go_goroutines 69
+# TYPE process_cpu_seconds counter
+# UNIT process_cpu_seconds seconds
+# HELP process_cpu_seconds Total user and system CPU time spent in seconds.
+process_cpu_seconds_total 4.20072246e+06
+# EOF
