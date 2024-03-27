@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # This test case was pulled from the Prometheus Node Exporter, version 1.7.0
+=======
+# This test case was pulled from the Prometheus Node Exporter, version 1.7.0 
+>>>>>>> 60c13aab2d10c511009ebb40c0f6e79557740686
 
 # HELP node_memory_Active_anon_bytes Memory information field Active_anon_bytes.
 # TYPE node_memory_Active_anon_bytes gauge
