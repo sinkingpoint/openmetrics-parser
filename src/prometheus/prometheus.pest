@@ -33,7 +33,7 @@ labelname = @{ labelname_initialchar ~ labelname_char* }
 labelname_char = _{ labelname_initialchar | ASCII_DIGIT }
 labelname_initialchar = _{ ASCII_ALPHA | "_" }
 
-metricname = {ASCII_ALPHA ~ metricnamechar* }
+metricname = { (ASCII_ALPHA | "_") ~ metricnamechar* }
 metricnamechar = _{ ASCII_ALPHANUMERIC | "_" }
 
 number = @{ realnumber | sign ~ (^"inf" | ^"infinity") | ^"nan" }
