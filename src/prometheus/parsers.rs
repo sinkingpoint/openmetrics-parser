@@ -216,7 +216,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<PrometheusType> {
                          metric_value: MetricNumber,
                          _: Vec<String>,
                          _: Vec<String>,
-                         _: Option<Exemplar>,
+                         exemplar: Option<Exemplar>,
                          _: bool| {
                             if let MetricValueMarshal::Counter(counter_value) =
                                 &mut existing_metric.value
@@ -234,6 +234,7 @@ impl MarshalledMetricFamily for MetricFamilyMarshal<PrometheusType> {
                                 }
 
                                 counter_value.value = Some(metric_value);
+                                counter_value.exemplar = exemplar;
                             } else {
                                 unreachable!();
                             }

@@ -65,3 +65,22 @@ fn run_openmetrics_validation() {
         }
     }
 }
+
+#[test]
+fn counter_exemplars_are_kept() {
+    use crate::OpenMetricsValue;
+
+    let exposition = crate::openmetrics::parse_openmetrics(
+        "# TYPE foo counter\nfoo_total 1 # {trace_id=\"abc\"} 0.5 123\n# EOF\n",
+    )
+    .unwrap();
+    let sample = exposition.families["foo"].iter_samples().next().unwrap();
+    let exemplar = match &sample.value {
+        OpenMetricsValue::Counter(c) => c.exemplar.as_ref().expect("exemplar was dropped"),
+        v => panic!("expected a counter, got {:?}", v),
+    };
+
+    assert_eq!(exemplar.labels["trace_id"], "abc");
+    assert_eq!(exemplar.id, 0.5);
+    assert_eq!(exemplar.timestamp, Some(123.));
+}
