@@ -5,6 +5,7 @@ dquote = _{ "\"" }
 sign = _{ "+" | "-" }
 comma = _{ "," }
 eq = _{ "=" }
+ws = _{ (" " | "\t")* }
 kw_help = { "HELP" }
 kw_type = { "TYPE" }
 kw_counter = { "counter" }
@@ -26,10 +27,10 @@ metricdescriptor = ${
     hash ~ sp ~ kw_type ~ sp ~ metricname ~ sp ~ metrictype ~ NEWLINE
 }
 exemplar = ${ sp ~ hash ~ sp ~ labels ~ sp ~ number ~ (sp ~ timestamp)? }
-metric = ${ metricname ~ labels? ~ sp+ ~ number ~ (sp ~ timestamp)? ~ exemplar? ~ NEWLINE }
+metric = ${ metricname ~ (ws ~ labels)? ~ sp+ ~ number ~ (sp ~ timestamp)? ~ exemplar? ~ NEWLINE }
 
-labels = { "{" ~ (label ~ (comma ~ label)*)? ~ ","? ~ "}" }
-label = { labelname ~ eq ~ dquote ~ escapedstring ~ dquote }
+labels = { "{" ~ ws ~ (label ~ (ws ~ comma ~ ws ~ label)*)? ~ ws ~ ","? ~ ws ~ "}" }
+label = { labelname ~ ws ~ eq ~ ws ~ dquote ~ escapedstring ~ dquote }
 labelname = @{ labelname_initialchar ~ labelname_char* }
 labelname_char = _{ labelname_initialchar | ASCII_DIGIT }
 labelname_initialchar = _{ ASCII_ALPHA | "_" }

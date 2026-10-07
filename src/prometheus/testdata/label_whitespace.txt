@@ -1,0 +1,5 @@
+# The Prometheus text parser skips blanks around label names, values, and separators
+# TYPE spaced gauge
+spaced{a="1", b="2"} 1
+spaced { a = "3" , b="4" , } 1
+spaced{	a="5",	b="6"	} 1
