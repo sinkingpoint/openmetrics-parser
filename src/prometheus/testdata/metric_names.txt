@@ -1,0 +1,9 @@
+# Metric names may match [a-zA-Z_:][a-zA-Z0-9_:]*
+# https://prometheus.io/docs/concepts/data_model/#metric-names-and-labels
+
+# TYPE job:http_requests:rate5m gauge
+job:http_requests:rate5m{job="api"} 12.5
+# TYPE _leading_underscore gauge
+_leading_underscore 1
+# TYPE node_memory_Active_anon_bytes gauge
+node_memory_Active_anon_bytes 7.9376384e+07
