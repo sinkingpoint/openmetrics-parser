@@ -55,6 +55,22 @@ fn run_openmetrics_validation() {
                 metrics_str,
                 parsed
             );
+
+            // Rendering a valid exposition should give one that parses back to the same thing
+            let rendered = parsed.unwrap().to_string();
+            let reparsed = crate::openmetrics::parse_openmetrics(&rendered);
+            assert!(
+                reparsed.is_ok(),
+                "\n{}\n Rendered exposition didn't reparse ({:?})",
+                rendered,
+                reparsed
+            );
+            assert_eq!(
+                rendered,
+                reparsed.unwrap().to_string(),
+                "Rendering {:?} isn't stable",
+                test_name
+            );
         } else {
             assert!(
                 parsed.is_err(),
