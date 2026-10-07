@@ -233,3 +233,24 @@ fn test_metric_number_operations() {
         assert_eq!(a, MetricNumber::Float(1.0 / 3.0));
     }
 }
+
+#[test]
+fn test_exemplar_render() {
+    use crate::Exemplar;
+    use std::collections::HashMap;
+
+    let labels: HashMap<String, String> = [("trace_id", "abc"), ("span_id", "def")]
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+
+    assert_eq!(
+        Exemplar::new(labels, 0.5, Some(123.)).to_string(),
+        " # {span_id=\"def\",trace_id=\"abc\"} 0.5 123"
+    );
+    assert_eq!(Exemplar::new(HashMap::new(), 1., None).to_string(), " # {} 1");
+
+    let test_str = "# TYPE foo_total counter\nfoo_total 1 # {trace_id=\"abc\"} 0.5\n";
+    let rendered = parse_prometheus(test_str).unwrap().to_string();
+    assert_eq!(rendered, test_str);
+}
