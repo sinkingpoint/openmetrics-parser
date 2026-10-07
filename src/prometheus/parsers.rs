@@ -6,6 +6,7 @@ use crate::{
     internal::{
         CounterValueMarshal, LabelNames, MarshalledMetric, MarshalledMetricFamily,
         MetricFamilyMarshal, MetricMarshal, MetricProcesser, MetricValueMarshal, MetricsType,
+        unescape, unescape_help,
     },
     public::*,
 };
@@ -741,7 +742,7 @@ pub fn parse_prometheus(
             Rule::kw_help => {
                 let help_text = descriptor.next().map(|s| s.as_str()).unwrap_or_default();
                 family.set_or_test_name(metric_name)?;
-                family.try_add_help(help_text.to_string())?;
+                family.try_add_help(unescape_help(help_text))?;
             }
             Rule::kw_type => {
                 let family_type = descriptor.next().unwrap().as_str();
@@ -762,7 +763,7 @@ pub fn parse_prometheus(
 
         let labels = parse_labels(labels)?
             .into_iter()
-            .map(|(a, b)| (a.to_owned(), b.to_owned()))
+            .map(|(a, b)| (a.to_owned(), b))
             .collect();
 
         let id = inner.next().unwrap().as_str();
@@ -792,16 +793,16 @@ pub fn parse_prometheus(
         Ok(Exemplar::new(labels, id, timestamp))
     }
 
-    fn parse_labels(pair: Pair<Rule>) -> Result<Vec<(&str, &str)>, ParseError> {
+    fn parse_labels(pair: Pair<Rule>) -> Result<Vec<(&str, String)>, ParseError> {
         assert_eq!(pair.as_rule(), Rule::labels);
 
         let mut label_pairs = pair.into_inner();
-        let mut labels: Vec<(&str, &str)> = Vec::new();
+        let mut labels: Vec<(&str, String)> = Vec::new();
 
         while label_pairs.peek().is_some() && label_pairs.peek().unwrap().as_rule() == Rule::label {
             let mut label = label_pairs.next().unwrap().into_inner();
             let name = label.next().unwrap().as_str();
-            let value = label.next().unwrap().as_str();
+            let value = unescape(label.next().unwrap().as_str());
 
             if labels.iter().any(|(n, _)| n == &name) {
                 return Err(ParseError::InvalidMetric(format!(
@@ -838,7 +839,7 @@ pub fn parse_prometheus(
             let mut values = Vec::new();
             for (name, value) in labels.into_iter() {
                 names.push(name.to_owned());
-                values.push(value.to_owned());
+                values.push(value);
             }
 
             (names, values)

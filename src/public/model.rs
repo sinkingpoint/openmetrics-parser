@@ -6,7 +6,7 @@ use std::{
 
 use auto_ops::impl_op_ex;
 
-use crate::internal::{render_label_values, RenderableMetricValue};
+use crate::internal::{escape_help, render_label_values, RenderableMetricValue};
 
 pub type Timestamp = f64;
 
@@ -298,7 +298,7 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if !self.help.is_empty() {
-            writeln!(f, "# HELP {} {}", self.family_name, self.help)?;
+            writeln!(f, "# HELP {} {}", self.family_name, escape_help(&self.help))?;
         }
 
         // A family with no samples and no other metadata still needs a line, or it disappears
