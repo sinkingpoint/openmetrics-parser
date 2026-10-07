@@ -1,0 +1,5 @@
+# Counters SHOULD end in _total, but the Prometheus text format doesn't require it
+# https://github.com/sinkingpoint/openmetrics-parser/issues/10
+# HELP lxd_uptime_seconds The daemon uptime in seconds.
+# TYPE lxd_uptime_seconds counter
+lxd_uptime_seconds 4242
