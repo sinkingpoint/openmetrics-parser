@@ -272,3 +272,27 @@ s_count 1 5
         assert!(line.ends_with(" 5"), "missing timestamp on `{}`", line);
     }
 }
+
+#[test]
+fn test_metric_number_operations_dont_panic() {
+    use crate::MetricNumber;
+
+    let max = MetricNumber::Int(i64::MAX);
+    let one = MetricNumber::Int(1);
+    let zero = MetricNumber::Int(0);
+
+    assert_eq!(max + one, MetricNumber::Float(i64::MAX as f64 + 1.));
+    assert_eq!(MetricNumber::Int(i64::MIN) - one, MetricNumber::Float(i64::MIN as f64 - 1.));
+    assert_eq!(max * MetricNumber::Int(2), MetricNumber::Float(i64::MAX as f64 * 2.));
+    assert_eq!(one / zero, MetricNumber::Float(f64::INFINITY));
+    assert!(matches!(zero / zero, MetricNumber::Float(f) if f.is_nan()));
+    assert_eq!(MetricNumber::Int(i64::MIN) / MetricNumber::Int(-1), MetricNumber::Float(-(i64::MIN as f64)));
+
+    let mut a = max;
+    a += one;
+    assert_eq!(a, MetricNumber::Float(i64::MAX as f64 + 1.));
+
+    let mut a = one;
+    a /= zero;
+    assert_eq!(a, MetricNumber::Float(f64::INFINITY));
+}
