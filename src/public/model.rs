@@ -978,12 +978,25 @@ impl MetricNumber {
     }
 }
 
+/// Applies an integer operation, falling back to the float version if it would overflow or divide by zero
+fn int_op(
+    a: i64,
+    b: i64,
+    checked: fn(i64, i64) -> Option<i64>,
+    float: fn(f64, f64) -> f64,
+) -> MetricNumber {
+    match checked(a, b) {
+        Some(n) => MetricNumber::Int(n),
+        None => MetricNumber::Float(float(a as f64, b as f64)),
+    }
+}
+
 impl_op_ex!(+ |a: &MetricNumber, b: &MetricNumber| -> MetricNumber {
     match (a, b) {
         (MetricNumber::Float(f), MetricNumber::Float(f2)) => MetricNumber::Float(f + f2),
         (MetricNumber::Float(f), MetricNumber::Int(i)) => MetricNumber::Float(f + *i as f64),
         (MetricNumber::Int(i), MetricNumber::Float(f)) => MetricNumber::Float(f + *i as f64),
-        (MetricNumber::Int(i), MetricNumber::Int(i2)) => MetricNumber::Int(i + i2),
+        (MetricNumber::Int(i), MetricNumber::Int(i2)) => int_op(*i, *i2, i64::checked_add, |a, b| a + b),
     }
 });
 
@@ -992,7 +1005,7 @@ impl_op_ex!(+= |a: &mut MetricNumber, b: &MetricNumber| {
         (MetricNumber::Float(f), MetricNumber::Float(f2)) => *a = MetricNumber::Float(*f + f2),
         (MetricNumber::Float(f), MetricNumber::Int(i)) => *a = MetricNumber::Float(*f + *i as f64),
         (MetricNumber::Int(i), MetricNumber::Float(f)) => *a = MetricNumber::Float(*i as f64 + *f),
-        (MetricNumber::Int(i), MetricNumber::Int(i2)) => *a = MetricNumber::Int(*i + i2),
+        (MetricNumber::Int(i), MetricNumber::Int(i2)) => *a = int_op(*i, *i2, i64::checked_add, |a, b| a + b),
     }
 });
 
@@ -1001,7 +1014,7 @@ impl_op_ex!(-|a: &MetricNumber, b: &MetricNumber| -> MetricNumber {
         (MetricNumber::Float(f), MetricNumber::Float(f2)) => MetricNumber::Float(f - f2),
         (MetricNumber::Float(f), MetricNumber::Int(i)) => MetricNumber::Float(f - *i as f64),
         (MetricNumber::Int(i), MetricNumber::Float(f)) => MetricNumber::Float(*i as f64 - f),
-        (MetricNumber::Int(i), MetricNumber::Int(i2)) => MetricNumber::Int(i - i2),
+        (MetricNumber::Int(i), MetricNumber::Int(i2)) => int_op(*i, *i2, i64::checked_sub, |a, b| a - b),
     }
 });
 
@@ -1010,7 +1023,7 @@ impl_op_ex!(-= |a: &mut MetricNumber, b: &MetricNumber| {
         (MetricNumber::Float(f), MetricNumber::Float(f2)) => *a = MetricNumber::Float(*f - f2),
         (MetricNumber::Float(f), MetricNumber::Int(i)) => *a = MetricNumber::Float(*f - *i as f64),
         (MetricNumber::Int(i), MetricNumber::Float(f)) => *a = MetricNumber::Float(*i as f64 - *f),
-        (MetricNumber::Int(i), MetricNumber::Int(i2)) => *a = MetricNumber::Int(*i - i2),
+        (MetricNumber::Int(i), MetricNumber::Int(i2)) => *a = int_op(*i, *i2, i64::checked_sub, |a, b| a - b),
     }
 });
 
@@ -1019,7 +1032,7 @@ impl_op_ex!(*|a: &MetricNumber, b: &MetricNumber| -> MetricNumber {
         (MetricNumber::Float(f), MetricNumber::Float(f2)) => MetricNumber::Float(f * f2),
         (MetricNumber::Float(f), MetricNumber::Int(i)) => MetricNumber::Float(f * *i as f64),
         (MetricNumber::Int(i), MetricNumber::Float(f)) => MetricNumber::Float(*i as f64 * *f),
-        (MetricNumber::Int(i), MetricNumber::Int(i2)) => MetricNumber::Int(i * i2),
+        (MetricNumber::Int(i), MetricNumber::Int(i2)) => int_op(*i, *i2, i64::checked_mul, |a, b| a * b),
     }
 });
 
@@ -1028,7 +1041,7 @@ impl_op_ex!(*= |a: &mut MetricNumber, b: &MetricNumber| {
         (MetricNumber::Float(f), MetricNumber::Float(f2)) => *a = MetricNumber::Float(*f * f2),
         (MetricNumber::Float(f), MetricNumber::Int(i)) => *a = MetricNumber::Float(*f * *i as f64),
         (MetricNumber::Int(i), MetricNumber::Float(f)) => *a = MetricNumber::Float(*i as f64 * *f),
-        (MetricNumber::Int(i), MetricNumber::Int(i2)) => *a = MetricNumber::Int(*i * i2),
+        (MetricNumber::Int(i), MetricNumber::Int(i2)) => *a = int_op(*i, *i2, i64::checked_mul, |a, b| a * b),
     }
 });
 
@@ -1037,7 +1050,7 @@ impl_op_ex!(/ |a: &MetricNumber, b: &MetricNumber| -> MetricNumber {
         (MetricNumber::Float(f), MetricNumber::Float(f2)) => MetricNumber::Float(f / f2),
         (MetricNumber::Float(f), MetricNumber::Int(i)) => MetricNumber::Float(f / *i as f64),
         (MetricNumber::Int(i), MetricNumber::Float(f)) => MetricNumber::Float(*i as f64 / f),
-        (MetricNumber::Int(i), MetricNumber::Int(i2)) => MetricNumber::Int(i / i2),
+        (MetricNumber::Int(i), MetricNumber::Int(i2)) => int_op(*i, *i2, i64::checked_div, |a, b| a / b),
     }
 });
 
@@ -1046,7 +1059,7 @@ impl_op_ex!(/= |a: &mut MetricNumber, b: &MetricNumber| {
         (MetricNumber::Float(f), MetricNumber::Float(f2)) => *a = MetricNumber::Float(*f / f2),
         (MetricNumber::Float(f), MetricNumber::Int(i)) => *a = MetricNumber::Float(*f / *i as f64),
         (MetricNumber::Int(i), MetricNumber::Float(f)) => *a = MetricNumber::Float(*i as f64 / f),
-        (MetricNumber::Int(i), MetricNumber::Int(i2)) => *a = MetricNumber::Int(*i / i2),
+        (MetricNumber::Int(i), MetricNumber::Int(i2)) => *a = int_op(*i, *i2, i64::checked_div, |a, b| a / b),
     }
 });
 
