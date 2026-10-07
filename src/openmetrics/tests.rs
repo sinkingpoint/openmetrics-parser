@@ -100,3 +100,14 @@ fn counter_exemplars_are_kept() {
     assert_eq!(exemplar.id, 0.5);
     assert_eq!(exemplar.timestamp, Some(123.));
 }
+
+#[test]
+fn escapes_are_resolved() {
+    let test_str = "# HELP foo he\\\"l\\\\p\\n\n# TYPE foo gauge\nfoo{a=\"x\\\"y\\\\z\\nw\"} 1\n# EOF\n";
+    let exposition = crate::openmetrics::parse_openmetrics(test_str).unwrap();
+    let family = &exposition.families["foo"];
+    assert_eq!(family.help, "he\"l\\p\n");
+
+    let sample = family.iter_samples().next().unwrap();
+    assert_eq!(sample.get_labelset().unwrap().get_label_value("a"), Some("x\"y\\z\nw"));
+}
