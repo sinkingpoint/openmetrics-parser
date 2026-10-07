@@ -115,23 +115,27 @@ where
         }
     }
 
-    pub fn with_labels<'a, T>(&self, labels: T) -> Self
+    /// Sets the given labels on every sample in the family, adding any that don't exist yet in sorted order.
+    /// Errors if overwriting an existing label would leave two samples with the same label set.
+    pub fn with_labels<'a, T>(&self, labels: T) -> Result<Self, ParseError>
     where
         T: IntoIterator<Item = (&'a str, &'a str)>,
     {
         let mut label_names = self.label_names.as_ref().clone();
         let mut samples = self.metrics.clone();
         for (k, v) in labels {
-            match label_names.binary_search(&k.to_owned() ) {
-                Ok(idx) => {
+            // Families built with `new` aren't necessarily sorted, so we can't binary search for existing labels
+            match label_names.iter().position(|n| n == k) {
+                Some(idx) => {
                     for sample in samples.iter_mut() {
                         sample.label_values[idx] = v.to_owned();
                     }
                 }
-                Err(idx) => {
+                None => {
+                    let idx = label_names.partition_point(|n| n.as_str() < k);
                     label_names.insert(idx, k.to_owned());
                     for sample in samples.iter_mut() {
-                        sample.label_values.insert(idx,v.to_owned());
+                        sample.label_values.insert(idx, v.to_owned());
                     }
                 }
             }
@@ -145,7 +149,6 @@ where
             self.unit.clone(),
         )
         .with_samples(samples)
-        .unwrap()
     }
 
     pub fn without_label(&self, label_name: &str) -> Result<Self, ParseError> {

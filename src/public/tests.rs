@@ -296,3 +296,54 @@ fn test_metric_number_operations_dont_panic() {
     a /= zero;
     assert_eq!(a, MetricNumber::Float(f64::INFINITY));
 }
+
+#[test]
+fn test_with_labels() {
+    use crate::{MetricFamily, MetricNumber, PrometheusType, PrometheusValue, Sample};
+
+    let gauge = |values: &[&str]| {
+        Sample::new(
+            values.iter().map(|v| v.to_string()).collect(),
+            None,
+            PrometheusValue::Gauge(MetricNumber::Int(1)),
+        )
+    };
+
+    // Label names deliberately unsorted
+    let family = MetricFamily::new(
+        String::from("test_metric"),
+        vec![String::from("zone"), String::from("app")],
+        PrometheusType::Gauge,
+        String::new(),
+        String::new(),
+    )
+    .with_samples(vec![gauge(&["a", "web"]), gauge(&["b", "web"])])
+    .unwrap();
+
+    // Overwrites the existing label rather than inserting a second `app`
+    let relabelled = family.with_labels(vec![("app", "api"), ("env", "prod")]).unwrap();
+    let mut names = relabelled.get_label_names().to_vec();
+    names.sort();
+    assert_eq!(names, &["app", "env", "zone"]);
+    for sample in relabelled.iter_samples() {
+        let labelset = sample.get_labelset().unwrap();
+        assert_eq!(labelset.get_label_value("app"), Some("api"));
+        assert_eq!(labelset.get_label_value("env"), Some("prod"));
+    }
+
+    // Collapsing `zone` would leave two samples with the same labels
+    assert!(family.with_labels(vec![("zone", "c")]).is_err());
+
+    // New labels go in sorted position when the family's labels are sorted
+    let sorted = MetricFamily::new(
+        String::from("test_metric"),
+        vec![String::from("app"), String::from("zone")],
+        PrometheusType::Gauge,
+        String::new(),
+        String::new(),
+    )
+    .with_samples(vec![gauge(&["web", "a"])])
+    .unwrap();
+    let relabelled = sorted.with_labels(vec![("env", "prod")]).unwrap();
+    assert_eq!(relabelled.get_label_names(), &["app", "env", "zone"]);
+}
