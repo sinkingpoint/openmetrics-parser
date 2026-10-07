@@ -34,8 +34,9 @@ labelname = @{ labelname_initialchar ~ labelname_char* }
 labelname_char = _{ labelname_initialchar | ASCII_DIGIT }
 labelname_initialchar = _{ ASCII_ALPHA | "_" }
 
-metricname = {ASCII_ALPHA ~ metricnamechar* }
-metricnamechar = _{ ASCII_ALPHANUMERIC | "_" }
+metricname = { metricname_initialchar ~ metricnamechar* }
+metricname_initialchar = _{ ASCII_ALPHA | "_" | ":" }
+metricnamechar = _{ metricname_initialchar | ASCII_DIGIT }
 
 number = @{ realnumber | sign ~ (^"inf" | ^"infinity") | ^"nan" }
 timestamp = @{ realnumber }
