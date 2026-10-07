@@ -36,9 +36,22 @@ impl Exemplar {
 
 impl fmt::Display for Exemplar {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let names: Vec<&str> = self.labels.keys().map(|s| s.as_str()).collect();
-        let values: Vec<&str> = self.labels.keys().map(|s| s.as_str()).collect();
-        write!(f, "# {} {}", render_label_values(&names, &values), self.id)?;
+        let mut labels: Vec<(&str, &str)> = self
+            .labels
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect();
+        labels.sort_unstable();
+        let (names, values): (Vec<&str>, Vec<&str>) = labels.into_iter().unzip();
+
+        // Unlike a sample, an exemplar's label set is mandatory, even if it's empty
+        let rendered_labels = if names.is_empty() {
+            String::from("{}")
+        } else {
+            render_label_values(&names, &values)
+        };
+
+        write!(f, " # {} {}", rendered_labels, format_float(self.id))?;
         if let Some(timestamp) = self.timestamp {
             write!(f, " {}", format_float(timestamp))?;
         }
