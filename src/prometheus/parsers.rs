@@ -745,7 +745,7 @@ pub fn parse_prometheus(
 
         match descriptor_type.as_rule() {
             Rule::kw_help => {
-                let help_text = descriptor.next().unwrap().as_str();
+                let help_text = descriptor.next().map(|s| s.as_str()).unwrap_or_default();
                 family.set_or_test_name(metric_name)?;
                 family.try_add_help(help_text.to_string())?;
             }

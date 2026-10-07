@@ -1,0 +1,6 @@
+# HELP no_help_text
+# TYPE no_help_text gauge
+no_help_text 1
+# HELP trailing_space 
+# TYPE trailing_space gauge
+trailing_space 1
