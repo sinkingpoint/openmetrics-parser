@@ -301,7 +301,9 @@ where
             writeln!(f, "# HELP {} {}", self.family_name, self.help)?;
         }
 
-        if self.family_type != <TypeSet>::default() {
+        // A family with no samples and no other metadata still needs a line, or it disappears
+        let is_bare = self.help.is_empty() && self.unit.is_empty() && self.metrics.is_empty();
+        if self.family_type != <TypeSet>::default() || is_bare {
             writeln!(f, "# TYPE {} {}", self.family_name, self.family_type)?;
         }
 
@@ -325,20 +327,38 @@ pub struct MetricsExposition<TypeSet, ValueType> {
     pub families: HashMap<String, MetricFamily<TypeSet, ValueType>>,
 }
 
-impl<TypeSet, ValueType> fmt::Display for MetricsExposition<TypeSet, ValueType>
+impl<TypeSet, ValueType> MetricsExposition<TypeSet, ValueType>
 where
     TypeSet: fmt::Display + Default + PartialEq,
     ValueType: RenderableMetricValue + Clone,
 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for (i, (_, family)) in self.families.iter().enumerate() {
-            write!(f, "{}", family)?;
-            if i != self.families.len()-1 {
-                write!(f, "\n")?;
+    /// Renders each family, sorted by name so that output is deterministic
+    fn render_families(&self, f: &mut fmt::Formatter<'_>, separator: &str) -> fmt::Result {
+        let mut families: Vec<_> = self.families.values().collect();
+        families.sort_by(|a, b| a.family_name.cmp(&b.family_name));
+
+        for (i, family) in families.into_iter().enumerate() {
+            if i != 0 {
+                f.write_str(separator)?;
             }
+            write!(f, "{}", family)?;
         }
 
         Ok(())
+    }
+}
+
+impl fmt::Display for MetricsExposition<PrometheusType, PrometheusValue> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.render_families(f, "\n")
+    }
+}
+
+impl fmt::Display for MetricsExposition<OpenMetricsType, OpenMetricsValue> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // OpenMetrics doesn't allow blank lines, and requires an EOF marker
+        self.render_families(f, "")?;
+        f.write_str("# EOF\n")
     }
 }
 
@@ -450,6 +470,24 @@ impl RenderableMetricValue for HistogramValue {
         label_names: &[&str],
         label_values: &[&str],
     ) -> fmt::Result {
+        self.render_with_suffixes(f, metric_name, timestamp, label_names, label_values, "_sum", "_count")
+    }
+}
+
+impl HistogramValue {
+    /// Renders the histogram, using the given suffixes for the sum and count lines
+    /// (GaugeHistograms use _gsum and _gcount)
+    #[allow(clippy::too_many_arguments)]
+    fn render_with_suffixes(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+        metric_name: &str,
+        timestamp: Option<&Timestamp>,
+        label_names: &[&str],
+        label_values: &[&str],
+        sum_suffix: &str,
+        count_suffix: &str,
+    ) -> fmt::Result {
         for bucket in self.buckets.iter() {
             bucket.render(f, metric_name, timestamp, label_names, label_values)?;
         }
@@ -458,11 +496,11 @@ impl RenderableMetricValue for HistogramValue {
         let timestamp = format_timestamp(timestamp);
 
         if let Some(s) = self.sum {
-            writeln!(f, "{}_sum{} {}{}", metric_name, labels, s, timestamp)?;
+            writeln!(f, "{}{}{} {}{}", metric_name, sum_suffix, labels, s, timestamp)?;
         }
 
         if let Some(c) = self.count {
-            writeln!(f, "{}_count{} {}{}", metric_name, labels, c, timestamp)?;
+            writeln!(f, "{}{}{} {}{}", metric_name, count_suffix, labels, c, timestamp)?;
         }
 
         if let Some(c) = self.created {
@@ -647,6 +685,23 @@ pub enum OpenMetricsType {
     Unknown,
 }
 
+impl fmt::Display for OpenMetricsType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let out = match self {
+            OpenMetricsType::Counter => "counter",
+            OpenMetricsType::Gauge => "gauge",
+            OpenMetricsType::Histogram => "histogram",
+            OpenMetricsType::GaugeHistogram => "gaugehistogram",
+            OpenMetricsType::StateSet => "stateset",
+            OpenMetricsType::Summary => "summary",
+            OpenMetricsType::Info => "info",
+            OpenMetricsType::Unknown => "unknown",
+        };
+
+        f.write_str(out)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum OpenMetricsValue {
     Unknown(MetricNumber),
@@ -683,31 +738,45 @@ impl RenderableMetricValue for OpenMetricsValue {
                 )
             },
             OpenMetricsValue::Counter(c) => {
-                write!(
-                    f,
-                    "{}{} {}{}",
-                    metric_name,
-                    render_label_values(label_names, label_values),
-                    c.value,
-                    timestamp_str
-                )?;
+                let labels = render_label_values(label_names, label_values);
+                write!(f, "{}_total{} {}{}", metric_name, labels, c.value, timestamp_str)?;
                 if let Some(ex) = c.exemplar.as_ref() {
                     write!(f, "{}", ex)?;
                 }
+                f.write_char('\n')?;
 
-                f.write_char('\n')
+                if let Some(created) = c.created {
+                    writeln!(
+                        f,
+                        "{}_created{} {}{}",
+                        metric_name,
+                        labels,
+                        format_float(created),
+                        timestamp_str
+                    )?;
+                }
+
+                Ok(())
             }
-            OpenMetricsValue::Histogram(h) | OpenMetricsValue::GaugeHistogram(h) => {
-                // TODO: This is actually wrong for GaugeHistograms (they should have _gsum and _gcount), but I'm too lazy to fix this at the moment
+            OpenMetricsValue::Histogram(h) => {
                 h.render(f, metric_name, timestamp, label_names, label_values)
             }
+            OpenMetricsValue::GaugeHistogram(h) => h.render_with_suffixes(
+                f,
+                metric_name,
+                timestamp,
+                label_names,
+                label_values,
+                "_gsum",
+                "_gcount",
+            ),
             OpenMetricsValue::Summary(s) => {
                 s.render(f, metric_name, timestamp, label_names, label_values)
             }
             OpenMetricsValue::Info => {
                 writeln!(
                     f,
-                    "{}{} {} {}",
+                    "{}_info{} {}{}",
                     metric_name,
                     render_label_values(label_names, label_values),
                     MetricNumber::Int(1),
@@ -734,7 +803,7 @@ impl fmt::Display for PrometheusType {
             PrometheusType::Gauge => "gauge",
             PrometheusType::Histogram => "histogram",
             PrometheusType::Summary => "summary",
-            PrometheusType::Unknown => "unknown",
+            PrometheusType::Unknown => "untyped",
         };
 
         f.write_str(out)
