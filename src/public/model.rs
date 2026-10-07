@@ -378,6 +378,13 @@ fn format_float(f: f64) -> String {
     }
 }
 
+/// Renders an optional sample timestamp, including its leading separator
+fn format_timestamp(timestamp: Option<&Timestamp>) -> String {
+    timestamp
+        .map(|t| format!(" {}", format_float(*t)))
+        .unwrap_or_default()
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct HistogramBucket {
     pub count: MetricNumber,
@@ -390,7 +397,7 @@ impl RenderableMetricValue for HistogramBucket {
         &self,
         f: &mut fmt::Formatter<'_>,
         metric_name: &str,
-        _: Option<&Timestamp>,
+        timestamp: Option<&Timestamp>,
         label_names: &[&str],
         label_values: &[&str],
     ) -> fmt::Result {
@@ -409,10 +416,11 @@ impl RenderableMetricValue for HistogramBucket {
 
         write!(
             f,
-            "{}_bucket{} {}",
+            "{}_bucket{} {}{}",
             metric_name,
             render_label_values(&label_names, &label_values),
-            self.count
+            self.count,
+            format_timestamp(timestamp)
         )?;
 
         if let Some(ex) = self.exemplar.as_ref() {
@@ -447,17 +455,18 @@ impl RenderableMetricValue for HistogramValue {
         }
 
         let labels = render_label_values(label_names, label_values);
+        let timestamp = format_timestamp(timestamp);
 
         if let Some(s) = self.sum {
-            writeln!(f, "{}_sum{} {}", metric_name, labels, s)?;
+            writeln!(f, "{}_sum{} {}{}", metric_name, labels, s, timestamp)?;
         }
 
         if let Some(c) = self.count {
-            writeln!(f, "{}_count{} {}", metric_name, labels, c)?;
+            writeln!(f, "{}_count{} {}{}", metric_name, labels, c, timestamp)?;
         }
 
         if let Some(c) = self.created {
-            writeln!(f, "{}_created{} {}", metric_name, labels, c)?;
+            writeln!(f, "{}_created{} {}{}", metric_name, labels, format_float(c), timestamp)?;
         }
 
         Ok(())
@@ -481,7 +490,7 @@ impl RenderableMetricValue for Quantile {
         &self,
         f: &mut fmt::Formatter<'_>,
         metric_name: &str,
-        _: Option<&Timestamp>,
+        timestamp: Option<&Timestamp>,
         label_names: &[&str],
         label_values: &[&str],
     ) -> fmt::Result {
@@ -500,10 +509,11 @@ impl RenderableMetricValue for Quantile {
 
         writeln!(
             f,
-            "{}{} {}",
+            "{}{} {}{}",
             metric_name,
             render_label_values(&label_names, &label_values),
-            self.value
+            self.value,
+            format_timestamp(timestamp)
         )
     }
 }
@@ -530,17 +540,18 @@ impl RenderableMetricValue for SummaryValue {
         }
 
         let labels = render_label_values(label_names, label_values);
+        let timestamp = format_timestamp(timestamp);
 
         if let Some(s) = self.sum {
-            writeln!(f, "{}_sum{} {}", metric_name, labels, s)?;
+            writeln!(f, "{}_sum{} {}{}", metric_name, labels, s, timestamp)?;
         }
 
         if let Some(s) = self.count {
-            writeln!(f, "{}_count{} {}", metric_name, labels, s)?;
+            writeln!(f, "{}_count{} {}{}", metric_name, labels, s, timestamp)?;
         }
 
         if let Some(s) = self.created {
-            writeln!(f, "{}_created{} {}", metric_name, labels, s)?;
+            writeln!(f, "{}_created{} {}{}", metric_name, labels, format_float(s), timestamp)?;
         }
 
         Ok(())
@@ -657,7 +668,7 @@ impl RenderableMetricValue for OpenMetricsValue {
         label_names: &[&str],
         label_values: &[&str],
     ) -> fmt::Result {
-        let timestamp_str = timestamp.map(|t| format!(" {}", format_float(*t))).unwrap_or_default();
+        let timestamp_str = format_timestamp(timestamp);
         match self {
             OpenMetricsValue::Unknown(n)
             | OpenMetricsValue::Gauge(n)
@@ -754,7 +765,7 @@ impl RenderableMetricValue for PrometheusValue {
         label_names: &[&str],
         label_values: &[&str],
     ) -> fmt::Result {
-        let timestamp_str = timestamp.map(|t| format!(" {}", format_float(*t))).unwrap_or_default();
+        let timestamp_str = format_timestamp(timestamp);
         match self {
             PrometheusValue::Unknown(n) | PrometheusValue::Gauge(n) => writeln!(
                 f,
