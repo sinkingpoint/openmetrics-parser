@@ -22,7 +22,7 @@ metricset = _{ (NEWLINE* ~ metricfamily)+ }
 metricfamily = { (metricdescriptor{1, 2} ~ metric*) |  metric+ }
 
 metricdescriptor = ${
-    hash ~ sp ~ kw_help ~ sp ~ metricname ~ sp ~ escapedstring ~ NEWLINE |
+    hash ~ sp ~ kw_help ~ sp ~ metricname ~ (sp ~ escapedstring)? ~ NEWLINE |
     hash ~ sp ~ kw_type ~ sp ~ metricname ~ sp ~ metrictype ~ NEWLINE
 }
 exemplar = ${ sp ~ hash ~ sp ~ labels ~ sp ~ number ~ (sp ~ timestamp)? }
