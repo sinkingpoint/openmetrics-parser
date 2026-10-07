@@ -254,3 +254,21 @@ fn test_exemplar_render() {
     let rendered = parse_prometheus(test_str).unwrap().to_string();
     assert_eq!(rendered, test_str);
 }
+
+#[test]
+fn test_render_keeps_timestamps() {
+    let test_str = r#"# TYPE h histogram
+h_bucket{le="1"} 0 5
+h_bucket{le="+Inf"} 1 5
+h_sum 1 5
+h_count 1 5
+# TYPE s summary
+s{quantile="0.5"} 1 5
+s_sum 1 5
+s_count 1 5
+"#;
+    let rendered = parse_prometheus(test_str).unwrap().to_string();
+    for line in rendered.lines().filter(|l| !l.is_empty() && !l.starts_with('#')) {
+        assert!(line.ends_with(" 5"), "missing timestamp on `{}`", line);
+    }
+}
