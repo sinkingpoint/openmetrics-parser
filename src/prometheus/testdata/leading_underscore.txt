@@ -1,0 +1,2 @@
+# TYPE _metric_with_leading_underscore gauge
+_metric_with_leading_underscore 3.14159
