@@ -111,3 +111,25 @@ fn escapes_are_resolved() {
     let sample = family.iter_samples().next().unwrap();
     assert_eq!(sample.get_labelset().unwrap().get_label_value("a"), Some("x\"y\\z\nw"));
 }
+
+#[test]
+fn quoted_utf8_names_are_parsed() {
+    // What the OTel Go exporter serves with the NoUTF8EscapingWithSuffixes strategy and `escaping=allow-utf-8`
+    let exposition = crate::openmetrics::parse_openmetrics(
+        "# TYPE \"http.server.requests\" counter\n{\"http.server.requests_total\",\"http.method\"=\"GET\"} 1.0\n# EOF\n",
+    )
+    .unwrap();
+    let family = &exposition.families["http.server.requests"];
+    assert_eq!(family.get_label_names(), ["http.method"]);
+
+    let sample = family.iter_samples().next().unwrap();
+    assert_eq!(sample.get_labelset().unwrap().get_label_value("http.method"), Some("GET"));
+}
+
+#[test]
+fn empty_quoted_names_are_rejected() {
+    use crate::openmetrics::parse_openmetrics;
+
+    assert!(parse_openmetrics("{\"\"} 1\n# EOF\n").is_err());
+    assert!(parse_openmetrics("foo{\"\"=\"1\"} 1\n# EOF\n").is_err());
+}

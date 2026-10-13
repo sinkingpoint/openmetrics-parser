@@ -23,17 +23,22 @@ metricset = _{ (NEWLINE* ~ metricfamily)+ }
 metricfamily = { (metricdescriptor{1, 2} ~ metric*) |  metric+ }
 
 metricdescriptor = ${
-    hash ~ sp ~ kw_help ~ sp ~ metricname ~ (sp ~ helpstring)? ~ NEWLINE |
-    hash ~ sp ~ kw_type ~ sp ~ metricname ~ sp ~ metrictype ~ NEWLINE
+    hash ~ sp ~ kw_help ~ sp ~ anymetricname ~ (sp ~ helpstring)? ~ NEWLINE |
+    hash ~ sp ~ kw_type ~ sp ~ anymetricname ~ sp ~ metrictype ~ NEWLINE
 }
 exemplar = ${ sp ~ hash ~ sp ~ labels ~ sp ~ number ~ (sp ~ timestamp)? }
-metric = ${ metricname ~ (ws ~ labels)? ~ sp+ ~ number ~ (sp ~ timestamp)? ~ exemplar? ~ NEWLINE }
+metric = ${ (metricname ~ (ws ~ labels)? | namedlabels) ~ sp+ ~ number ~ (sp ~ timestamp)? ~ exemplar? ~ NEWLINE }
 
 labels = { "{" ~ ws ~ (label ~ (ws ~ comma ~ ws ~ label)*)? ~ ws ~ ","? ~ ws ~ "}" }
-label = { labelname ~ ws ~ eq ~ ws ~ dquote ~ escapedstring ~ dquote }
+namedlabels = { "{" ~ ws ~ quotedname ~ (ws ~ comma ~ ws ~ label)* ~ ws ~ ","? ~ ws ~ "}" }
+label = { (labelname | quotedname) ~ ws ~ eq ~ ws ~ dquote ~ escapedstring ~ dquote }
 labelname = @{ labelname_initialchar ~ labelname_char* }
 labelname_char = _{ labelname_initialchar | ASCII_DIGIT }
 labelname_initialchar = _{ ASCII_ALPHA | "_" }
+
+anymetricname = _{ metricname | quotedname }
+quotedname = ${ dquote ~ quotednamechars ~ dquote }
+quotednamechars = @{ escapedchar+ }
 
 metricname = { metricname_initialchar ~ metricnamechar* }
 metricname_initialchar = _{ ASCII_ALPHA | "_" | ":" }

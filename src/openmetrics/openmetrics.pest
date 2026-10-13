@@ -25,19 +25,20 @@ metricset = _{ metricfamily+ }
 metricfamily = ${ (metricdescriptor* ~ metric+) | (metricdescriptor+ ~ metric*) }
 
 metricdescriptor = ${
-                     (hash ~ sp ~ kw_type ~ sp ~ metricname ~ sp ~ metrictype ~ NEWLINE) | 
-                     (hash ~ sp ~ kw_help ~ sp ~ metricname ~ sp ~ helpstring ~ NEWLINE) | 
-                     (hash ~ sp ~ kw_unit ~ sp ~ metricname ~ (sp ~ metricunit)? ~ NEWLINE)
+                     (hash ~ sp ~ kw_type ~ sp ~ anymetricname ~ sp ~ metrictype ~ NEWLINE) | 
+                     (hash ~ sp ~ kw_help ~ sp ~ anymetricname ~ sp ~ helpstring ~ NEWLINE) | 
+                     (hash ~ sp ~ kw_unit ~ sp ~ anymetricname ~ (sp ~ metricunit)? ~ NEWLINE)
                    }
 
 metric = _{ sample+ }
 metrictype = @{ kw_gaugehistogram | kw_counter | kw_gauge |  kw_histogram | kw_statefulset | kw_info | kw_summary | kw_unknown }
 metricunit = { metricname_char* }
 
-sample = ${ metricname ~ labels? ~ sp ~ number ~ (sp ~ timestamp)? ~ exemplar? ~ NEWLINE }
+sample = ${ (metricname ~ labels? | namedlabels) ~ sp ~ number ~ (sp ~ timestamp)? ~ exemplar? ~ NEWLINE }
 exemplar = ${ sp ~ hash ~ sp ~ labels ~ sp ~ number ~ (sp ~ timestamp)? }
 labels = { "{" ~ (label ~ (comma ~ label)*)? ~ "}" }
-label = { labelname ~ eq ~ dquote ~ escapedstring ~ dquote }
+namedlabels = { "{" ~ quotedname ~ (comma ~ label)* ~ "}" }
+label = { (labelname | quotedname) ~ eq ~ dquote ~ escapedstring ~ dquote }
 
 number = @{ realnumber | sign ~ (^"inf" | ^"infinity") | ^"nan" }
 timestamp = @{ realnumber }
@@ -46,6 +47,10 @@ realnumber = @{ sign? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)? ~ ("e" ~ sign? ~ AS
 metricname = @{ metricname_initialchar ~ metricname_char* }
 metricname_char = _{ metricname_initialchar | ASCII_DIGIT }
 metricname_initialchar = _{ ASCII_ALPHA | "_" | ":" }
+
+anymetricname = _{ metricname | quotedname }
+quotedname = ${ dquote ~ quotednamechars ~ dquote }
+quotednamechars = @{ escapedchar+ }
 
 labelname = @{ labelname_initialchar ~ labelname_char* }
 labelname_char = _{ labelname_initialchar | ASCII_DIGIT }
