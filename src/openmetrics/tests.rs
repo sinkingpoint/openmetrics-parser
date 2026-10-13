@@ -133,3 +133,13 @@ fn empty_quoted_names_are_rejected() {
     assert!(parse_openmetrics("{\"\"} 1\n# EOF\n").is_err());
     assert!(parse_openmetrics("foo{\"\"=\"1\"} 1\n# EOF\n").is_err());
 }
+
+#[test]
+fn quoted_names_round_trip() {
+    use crate::openmetrics::parse_openmetrics;
+
+    // Rendering has to quote the names again, or the output can't be parsed back
+    let test_str = "# TYPE \"http.server.requests\" counter\n{\"http.server.requests_total\",\"http.method\"=\"GET\"} 1\n# EOF\n";
+    let rendered = parse_openmetrics(test_str).unwrap().to_string();
+    assert_eq!(rendered, test_str);
+}
