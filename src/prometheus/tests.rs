@@ -71,3 +71,15 @@ fn empty_quoted_names_are_rejected() {
     assert!(parse_prometheus("{\"\"} 1\n").is_err());
     assert!(parse_prometheus("foo{\"\"=\"1\"} 1\n").is_err());
 }
+
+#[test]
+fn quoted_names_round_trip() {
+    // Rendering has to quote the names again, or the output can't be parsed back
+    for test_str in [
+        "# TYPE \"http.server.requests\" counter\n{\"http.server.requests\",\"http.method\"=\"GET\"} 1\n",
+        "{\"a\\nb\"} 1\n",
+    ] {
+        let rendered = parse_prometheus(test_str).unwrap().to_string();
+        assert_eq!(rendered, test_str);
+    }
+}

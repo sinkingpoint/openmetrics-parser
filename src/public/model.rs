@@ -6,7 +6,9 @@ use std::{
 
 use auto_ops::impl_op_ex;
 
-use crate::internal::{escape_help, render_label_values, RenderableMetricValue};
+use crate::internal::{
+    escape_help, render_label_values, render_metric_name, render_series, RenderableMetricValue,
+};
 
 pub type Timestamp = f64;
 
@@ -301,17 +303,17 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if !self.help.is_empty() {
-            writeln!(f, "# HELP {} {}", self.family_name, escape_help(&self.help))?;
+            writeln!(f, "# HELP {} {}", render_metric_name(&self.family_name), escape_help(&self.help))?;
         }
 
         // A family with no samples and no other metadata still needs a line, or it disappears
         let is_bare = self.help.is_empty() && self.unit.is_empty() && self.metrics.is_empty();
         if self.family_type != <TypeSet>::default() || is_bare {
-            writeln!(f, "# TYPE {} {}", self.family_name, self.family_type)?;
+            writeln!(f, "# TYPE {} {}", render_metric_name(&self.family_name), self.family_type)?;
         }
 
         if !self.unit.is_empty() {
-            writeln!(f, "# UNIT {} {}", self.family_name, self.unit)?;
+            writeln!(f, "# UNIT {} {}", render_metric_name(&self.family_name), self.unit)?;
         }
 
         let label_names: Vec<&str> = self.label_names.iter().map(|s| s.as_str()).collect();
@@ -439,9 +441,8 @@ impl RenderableMetricValue for HistogramBucket {
 
         write!(
             f,
-            "{}_bucket{} {}{}",
-            metric_name,
-            render_label_values(&label_names, &label_values),
+            "{} {}{}",
+            render_series(&format!("{}_bucket", metric_name), &label_names, &label_values),
             self.count,
             format_timestamp(timestamp)
         )?;
@@ -495,19 +496,19 @@ impl HistogramValue {
             bucket.render(f, metric_name, timestamp, label_names, label_values)?;
         }
 
-        let labels = render_label_values(label_names, label_values);
+        let series = |suffix: &str| render_series(&format!("{}{}", metric_name, suffix), label_names, label_values);
         let timestamp = format_timestamp(timestamp);
 
         if let Some(s) = self.sum {
-            writeln!(f, "{}{}{} {}{}", metric_name, sum_suffix, labels, s, timestamp)?;
+            writeln!(f, "{} {}{}", series(sum_suffix), s, timestamp)?;
         }
 
         if let Some(c) = self.count {
-            writeln!(f, "{}{}{} {}{}", metric_name, count_suffix, labels, c, timestamp)?;
+            writeln!(f, "{} {}{}", series(count_suffix), c, timestamp)?;
         }
 
         if let Some(c) = self.created {
-            writeln!(f, "{}_created{} {}{}", metric_name, labels, format_float(c), timestamp)?;
+            writeln!(f, "{} {}{}", series("_created"), format_float(c), timestamp)?;
         }
 
         Ok(())
@@ -550,9 +551,8 @@ impl RenderableMetricValue for Quantile {
 
         writeln!(
             f,
-            "{}{} {}{}",
-            metric_name,
-            render_label_values(&label_names, &label_values),
+            "{} {}{}",
+            render_series(metric_name, &label_names, &label_values),
             self.value,
             format_timestamp(timestamp)
         )
@@ -580,19 +580,19 @@ impl RenderableMetricValue for SummaryValue {
             q.render(f, metric_name, timestamp, label_names, label_values)?;
         }
 
-        let labels = render_label_values(label_names, label_values);
+        let series = |suffix: &str| render_series(&format!("{}{}", metric_name, suffix), label_names, label_values);
         let timestamp = format_timestamp(timestamp);
 
         if let Some(s) = self.sum {
-            writeln!(f, "{}_sum{} {}{}", metric_name, labels, s, timestamp)?;
+            writeln!(f, "{} {}{}", series("_sum"), s, timestamp)?;
         }
 
         if let Some(s) = self.count {
-            writeln!(f, "{}_count{} {}{}", metric_name, labels, s, timestamp)?;
+            writeln!(f, "{} {}{}", series("_count"), s, timestamp)?;
         }
 
         if let Some(s) = self.created {
-            writeln!(f, "{}_created{} {}{}", metric_name, labels, format_float(s), timestamp)?;
+            writeln!(f, "{} {}{}", series("_created"), format_float(s), timestamp)?;
         }
 
         Ok(())
@@ -733,16 +733,15 @@ impl RenderableMetricValue for OpenMetricsValue {
             | OpenMetricsValue::StateSet(n) =>{
                 writeln!(
                     f,
-                    "{}{} {}{}",
-                    metric_name,
-                    render_label_values(label_names, label_values),
+                    "{} {}{}",
+                    render_series(metric_name, label_names, label_values),
                     n,
                     timestamp_str
                 )
             },
             OpenMetricsValue::Counter(c) => {
-                let labels = render_label_values(label_names, label_values);
-                write!(f, "{}_total{} {}{}", metric_name, labels, c.value, timestamp_str)?;
+                let series = |suffix: &str| render_series(&format!("{}{}", metric_name, suffix), label_names, label_values);
+                write!(f, "{} {}{}", series("_total"), c.value, timestamp_str)?;
                 if let Some(ex) = c.exemplar.as_ref() {
                     write!(f, "{}", ex)?;
                 }
@@ -751,9 +750,8 @@ impl RenderableMetricValue for OpenMetricsValue {
                 if let Some(created) = c.created {
                     writeln!(
                         f,
-                        "{}_created{} {}{}",
-                        metric_name,
-                        labels,
+                        "{} {}{}",
+                        series("_created"),
                         format_float(created),
                         timestamp_str
                     )?;
@@ -779,9 +777,8 @@ impl RenderableMetricValue for OpenMetricsValue {
             OpenMetricsValue::Info => {
                 writeln!(
                     f,
-                    "{}_info{} {}{}",
-                    metric_name,
-                    render_label_values(label_names, label_values),
+                    "{} {}{}",
+                    render_series(&format!("{}_info", metric_name), label_names, label_values),
                     MetricNumber::Int(1),
                     timestamp_str
                 )
@@ -841,18 +838,16 @@ impl RenderableMetricValue for PrometheusValue {
         match self {
             PrometheusValue::Unknown(n) | PrometheusValue::Gauge(n) => writeln!(
                 f,
-                "{}{} {}{}",
-                metric_name,
-                render_label_values(label_names, label_values),
+                "{} {}{}",
+                render_series(metric_name, label_names, label_values),
                 n,
                 timestamp_str
             ),
             PrometheusValue::Counter(c) => {
                 write!(
                     f,
-                    "{}{} {}{}",
-                    metric_name,
-                    render_label_values(label_names, label_values),
+                    "{} {}{}",
+                    render_series(metric_name, label_names, label_values),
                     c.value,
                     timestamp_str
                 )?;
