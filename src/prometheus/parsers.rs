@@ -798,11 +798,12 @@ pub fn parse_prometheus(
         Ok(Exemplar::new(labels, id, timestamp))
     }
 
-    fn parse_labels(mut label_pairs: Pairs<Rule>) -> Result<Vec<(String, String)>, ParseError> {
+    fn parse_labels(label_pairs: Pairs<Rule>) -> Result<Vec<(String, String)>, ParseError> {
         let mut labels: Vec<(String, String)> = Vec::new();
 
-        while label_pairs.peek().is_some() && label_pairs.peek().unwrap().as_rule() == Rule::label {
-            let mut label = label_pairs.next().unwrap().into_inner();
+        for label in label_pairs {
+            assert_eq!(label.as_rule(), Rule::label);
+            let mut label = label.into_inner();
             let name = parse_name(label.next().unwrap());
             let value = unescape(label.next().unwrap().as_str());
 
