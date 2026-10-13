@@ -44,3 +44,30 @@ fn escapes_are_resolved() {
     // Rendering escapes them again
     assert_eq!(exposition.to_string(), test_str);
 }
+
+#[test]
+fn quoted_utf8_names_are_parsed() {
+    // What the OTel Go exporter serves with the NoTranslation strategy and `escaping=allow-utf-8`
+    let exposition = parse_prometheus(
+        "# HELP \"http.server.requests\" Requests.\n# TYPE \"http.server.requests\" counter\n{\"http.server.requests\",\"http.method\"=\"GET\"} 1\n",
+    )
+    .unwrap();
+    let family = &exposition.families["http.server.requests"];
+    assert_eq!(family.get_label_names(), ["http.method"]);
+
+    let sample = family.iter_samples().next().unwrap();
+    assert_eq!(sample.get_labelset().unwrap().get_label_value("http.method"), Some("GET"));
+}
+
+#[test]
+fn quoted_names_are_unescaped() {
+    let exposition = parse_prometheus("{\"a\\\"b\", \"c\\\\d\"=\"1\"} 1\n").unwrap();
+    let family = &exposition.families["a\"b"];
+    assert_eq!(family.get_label_names(), ["c\\d"]);
+}
+
+#[test]
+fn empty_quoted_names_are_rejected() {
+    assert!(parse_prometheus("{\"\"} 1\n").is_err());
+    assert!(parse_prometheus("foo{\"\"=\"1\"} 1\n").is_err());
+}

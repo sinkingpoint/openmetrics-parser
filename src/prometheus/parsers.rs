@@ -726,7 +726,15 @@ impl TryFrom<&str> for PrometheusType {
 pub fn parse_prometheus(
     exposition_bytes: &str,
 ) -> Result<MetricsExposition<PrometheusType, PrometheusValue>, ParseError> {
-    use pest::iterators::Pair;
+    use pest::iterators::{Pair, Pairs};
+
+    // A quoted name (`"http.server.requests"`) can carry escapes, a bare one can't
+    fn parse_name(pair: Pair<Rule>) -> String {
+        match pair.as_rule() {
+            Rule::quotedname => unescape(pair.into_inner().next().unwrap().as_str()),
+            _ => pair.as_str().to_owned(),
+        }
+    }
 
     fn parse_metric_descriptor(
         pair: Pair<Rule>,
@@ -736,7 +744,7 @@ pub fn parse_prometheus(
 
         let mut descriptor = pair.into_inner();
         let descriptor_type = descriptor.next().unwrap();
-        let metric_name = descriptor.next().unwrap().as_str().to_string();
+        let metric_name = parse_name(descriptor.next().unwrap());
 
         match descriptor_type.as_rule() {
             Rule::kw_help => {
@@ -761,10 +769,7 @@ pub fn parse_prometheus(
         let labels = inner.next().unwrap();
         assert_eq!(labels.as_rule(), Rule::labels);
 
-        let labels = parse_labels(labels)?
-            .into_iter()
-            .map(|(a, b)| (a.to_owned(), b))
-            .collect();
+        let labels = parse_labels(labels.into_inner())?.into_iter().collect();
 
         let id = inner.next().unwrap().as_str();
         let id = match id.parse() {
@@ -793,15 +798,12 @@ pub fn parse_prometheus(
         Ok(Exemplar::new(labels, id, timestamp))
     }
 
-    fn parse_labels(pair: Pair<Rule>) -> Result<Vec<(&str, String)>, ParseError> {
-        assert_eq!(pair.as_rule(), Rule::labels);
-
-        let mut label_pairs = pair.into_inner();
-        let mut labels: Vec<(&str, String)> = Vec::new();
+    fn parse_labels(mut label_pairs: Pairs<Rule>) -> Result<Vec<(String, String)>, ParseError> {
+        let mut labels: Vec<(String, String)> = Vec::new();
 
         while label_pairs.peek().is_some() && label_pairs.peek().unwrap().as_rule() == Rule::label {
             let mut label = label_pairs.next().unwrap().into_inner();
-            let name = label.next().unwrap().as_str();
+            let name = parse_name(label.next().unwrap());
             let value = unescape(label.next().unwrap().as_str());
 
             if labels.iter().any(|(n, _)| n == &name) {
@@ -814,7 +816,7 @@ pub fn parse_prometheus(
             labels.push((name, value));
         }
 
-        labels.sort_by_key(|l| l.0);
+        labels.sort_by(|a, b| a.0.cmp(&b.0));
 
         Ok(labels)
     }
@@ -826,19 +828,25 @@ pub fn parse_prometheus(
         assert_eq!(pair.as_rule(), Rule::metric);
 
         let mut descriptor = pair.into_inner();
-        let metric_name = descriptor.next().unwrap().as_str();
+        let first = descriptor.next().unwrap();
 
-        let labels = if descriptor.peek().unwrap().as_rule() == Rule::labels {
-            parse_labels(descriptor.next().unwrap())?
+        let (metric_name, labels) = if first.as_rule() == Rule::namedlabels {
+            // `{"name", label="value"}`: the quoted name sits inside the braces, ahead of the labels
+            let mut inner = first.into_inner();
+            let name = parse_name(inner.next().unwrap());
+            (name, parse_labels(inner)?)
+        } else if descriptor.peek().unwrap().as_rule() == Rule::labels {
+            let labels = parse_labels(descriptor.next().unwrap().into_inner())?;
+            (first.as_str().to_owned(), labels)
         } else {
-            Vec::new()
+            (first.as_str().to_owned(), Vec::new())
         };
 
         let (label_names, label_values) = {
             let mut names = Vec::new();
             let mut values = Vec::new();
             for (name, value) in labels.into_iter() {
-                names.push(name.to_owned());
+                names.push(name);
                 values.push(value);
             }
 
@@ -875,7 +883,7 @@ pub fn parse_prometheus(
         }
 
         family.process_new_metric(
-            metric_name,
+            &metric_name,
             value,
             label_names,
             label_values,
