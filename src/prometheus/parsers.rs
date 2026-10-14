@@ -817,7 +817,7 @@ pub fn parse_prometheus(
             labels.push((name, value));
         }
 
-        labels.sort_by(|a, b| a.0.cmp(&b.0));
+        labels.sort_unstable();
 
         Ok(labels)
     }
@@ -836,23 +836,15 @@ pub fn parse_prometheus(
             let mut inner = first.into_inner();
             let name = parse_name(inner.next().unwrap());
             (name, parse_labels(inner)?)
-        } else if descriptor.peek().unwrap().as_rule() == Rule::labels {
-            let labels = parse_labels(descriptor.next().unwrap().into_inner())?;
-            (first.as_str().to_owned(), labels)
         } else {
-            (first.as_str().to_owned(), Vec::new())
+            let labels = match descriptor.peek().unwrap().as_rule() {
+                Rule::labels => parse_labels(descriptor.next().unwrap().into_inner())?,
+                _ => Vec::new(),
+            };
+            (first.as_str().to_owned(), labels)
         };
 
-        let (label_names, label_values) = {
-            let mut names = Vec::new();
-            let mut values = Vec::new();
-            for (name, value) in labels.into_iter() {
-                names.push(name);
-                values.push(value);
-            }
-
-            (names, values)
-        };
+        let (label_names, label_values): (Vec<_>, Vec<_>) = labels.into_iter().unzip();
 
         let value = descriptor.next().unwrap().as_str();
         let value = match value.parse() {
