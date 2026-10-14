@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 /// Resolves the escape sequences (`\\`, `\n`, and `\"`) in a label value or OpenMetrics help string.
 /// A backslash that doesn't start one of those sequences is kept as-is.
 pub fn unescape(s: &str) -> String {
@@ -52,23 +54,24 @@ fn quote(s: &str) -> String {
     format!("\"{}\"", escape_label_value(s))
 }
 
-/// Renders a metric name for a HELP, TYPE, or UNIT line, quoting it if it isn't a legacy name
-pub fn render_metric_name(name: &str) -> String {
-    if is_legacy_name(name, true) {
-        name.to_owned()
+fn render_name(name: &str, allow_colon: bool) -> Cow<'_, str> {
+    if is_legacy_name(name, allow_colon) {
+        Cow::Borrowed(name)
     } else {
-        quote(name)
+        Cow::Owned(quote(name))
     }
+}
+
+/// Renders a metric name for a HELP, TYPE, or UNIT line, quoting it if it isn't a legacy name
+pub fn render_metric_name(name: &str) -> Cow<'_, str> {
+    render_name(name, true)
 }
 
 fn render_labels(label_names: &[&str], label_values: &[&str]) -> Vec<String> {
     label_names
         .iter()
         .zip(label_values.iter())
-        .map(|(name, value)| {
-            let name = if is_legacy_name(name, false) { name.to_string() } else { quote(name) };
-            format!("{}=\"{}\"", name, escape_label_value(value))
-        })
+        .map(|(name, value)| format!("{}=\"{}\"", render_name(name, false), escape_label_value(value)))
         .collect()
 }
 
@@ -80,13 +83,14 @@ pub fn render_label_values(label_names: &[&str], label_values: &[&str]) -> Strin
     format!("{{{}}}", render_labels(label_names, label_values).join(","))
 }
 
-/// Renders `name{labels}`, or `{"name",labels}` when the name has to be quoted
-pub fn render_series(name: &str, label_names: &[&str], label_values: &[&str]) -> String {
-    if is_legacy_name(name, true) {
-        return format!("{}{}", name, render_label_values(label_names, label_values));
+/// Renders `name_suffix{labels}`, or `{"name_suffix",labels}` when the name has to be quoted
+pub fn render_series(name: &str, suffix: &str, label_names: &[&str], label_values: &[&str]) -> String {
+    // Suffixes are `_` plus letters, so they never change whether a non-empty name is legacy
+    if is_legacy_name(name, true) || (name.is_empty() && is_legacy_name(suffix, true)) {
+        return format!("{}{}{}", name, suffix, render_label_values(label_names, label_values));
     }
 
-    let mut parts = vec![quote(name)];
+    let mut parts = vec![quote(&format!("{}{}", name, suffix))];
     parts.extend(render_labels(label_names, label_values));
     format!("{{{}}}", parts.join(","))
 }
