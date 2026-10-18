@@ -73,10 +73,8 @@ impl MetricsType for OpenMetricsType {
     }
 
     fn can_have_units(&self) -> bool {
-        matches!(
-            self,
-            OpenMetricsType::Counter | OpenMetricsType::Unknown | OpenMetricsType::Gauge
-        )
+        // The spec only forbids units on Info and StateSet metric families
+        !matches!(self, OpenMetricsType::Info | OpenMetricsType::StateSet)
     }
 
     fn can_have_multiple_lines(&self) -> bool {
