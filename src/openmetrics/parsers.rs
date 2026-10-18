@@ -1008,6 +1008,18 @@ impl From<MetricFamilyMarshal<OpenMetricsType>>
     }
 }
 
+/// The suffixes a family of this type adds to its name to make its sample names
+fn sample_suffixes(family_type: &OpenMetricsType) -> &'static [&'static str] {
+    match family_type {
+        OpenMetricsType::Counter => &["_total", "_created"],
+        OpenMetricsType::Histogram => &["_bucket", "_count", "_sum", "_created"],
+        OpenMetricsType::GaugeHistogram => &["_bucket", "_gcount", "_gsum"],
+        OpenMetricsType::Summary => &["", "_count", "_sum"],
+        OpenMetricsType::Info => &["_info"],
+        OpenMetricsType::Gauge | OpenMetricsType::StateSet | OpenMetricsType::Unknown => &[""],
+    }
+}
+
 pub fn parse_openmetrics(
     exposition_bytes: &str,
 ) -> Result<MetricsExposition<OpenMetricsType, OpenMetricsValue>, ParseError> {
@@ -1181,23 +1193,33 @@ pub fn parse_openmetrics(
         Ok(())
     }
 
-    fn parse_metric_family(
+    /// The grammar can put the descriptors of several families into one `metricfamily` pair, because
+    /// a family can have zero metrics. A descriptor for a new name starts the next family.
+    fn parse_metric_families(
         pair: Pair<Rule>,
-    ) -> Result<MetricFamily<OpenMetricsType, OpenMetricsValue>, ParseError> {
+    ) -> Result<Vec<MetricFamily<OpenMetricsType, OpenMetricsValue>>, ParseError> {
         assert_eq!(pair.as_rule(), Rule::metricfamily);
 
+        let mut families = Vec::new();
         let mut metric_family = MetricFamilyMarshal::empty();
 
         for child in pair.into_inner() {
             match child.as_rule() {
                 Rule::metricdescriptor => {
-                    if metric_family.metrics.is_empty() {
-                        parse_metric_descriptor(child, &mut metric_family)?;
-                    } else {
+                    if !metric_family.metrics.is_empty() {
                         return Err(ParseError::InvalidMetric(
                             "Metric Descriptor after samples".to_owned(),
                         ));
                     }
+
+                    let name = parse_name(child.clone().into_inner().nth(1).unwrap());
+                    if matches!(&metric_family.name, Some(n) if n != &name) {
+                        let previous = std::mem::replace(&mut metric_family, MetricFamilyMarshal::empty());
+                        previous.validate()?;
+                        families.push(previous.into());
+                    }
+
+                    parse_metric_descriptor(child, &mut metric_family)?;
                 }
                 Rule::sample => {
                     parse_sample(child, &mut metric_family)?;
@@ -1207,8 +1229,9 @@ pub fn parse_openmetrics(
         }
 
         metric_family.validate()?;
+        families.push(metric_family.into());
 
-        Ok(metric_family.into())
+        Ok(families)
     }
 
     let exposition_marshal = OpenMetricsParser::parse(Rule::exposition, exposition_bytes)?
@@ -1218,22 +1241,40 @@ pub fn parse_openmetrics(
 
     assert_eq!(exposition_marshal.as_rule(), Rule::exposition);
 
+    // Every family name and sample name seen so far, so that a family can't clash with another
+    // family's samples (a gauge `a_created` and a counter `a`)
+    let mut taken_names = std::collections::HashSet::new();
+
     let mut found_eof = false;
     for span in exposition_marshal.into_inner() {
         match span.as_rule() {
             Rule::metricfamily => {
-                let family = parse_metric_family(span)?;
+                for family in parse_metric_families(span)? {
+                    if exposition.families.contains_key(&family.family_name) {
+                        return Err(ParseError::InvalidMetric(format!(
+                            "Found a metric family called {}, after that family was finalised",
+                            family.family_name
+                        )));
+                    }
 
-                if exposition.families.contains_key(&family.family_name) {
-                    return Err(ParseError::InvalidMetric(format!(
-                        "Found a metric family called {}, after that family was finalised",
-                        family.family_name
-                    )));
+                    let mut names: std::collections::HashSet<String> = sample_suffixes(&family.family_type)
+                        .iter()
+                        .map(|suffix| format!("{}{}", family.family_name, suffix))
+                        .collect();
+                    names.insert(family.family_name.clone());
+
+                    if let Some(name) = names.iter().find(|name| taken_names.contains(*name)) {
+                        return Err(ParseError::InvalidMetric(format!(
+                            "Metric family {} clashes with another family over the name {}",
+                            family.family_name, name
+                        )));
+                    }
+                    taken_names.extend(names);
+
+                    exposition
+                        .families
+                        .insert(family.family_name.clone(), family);
                 }
-
-                exposition
-                    .families
-                    .insert(family.family_name.clone(), family);
             }
             Rule::kw_eof => {
                 found_eof = true;
