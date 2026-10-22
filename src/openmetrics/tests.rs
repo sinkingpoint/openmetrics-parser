@@ -143,3 +143,26 @@ fn quoted_names_round_trip() {
     let rendered = parse_openmetrics(test_str).unwrap().to_string();
     assert_eq!(rendered, test_str);
 }
+
+#[test]
+fn families_can_have_zero_metrics() {
+    use crate::openmetrics::parse_openmetrics;
+
+    // From issue #13. The spec says "A MetricFamily MAY have zero or more Metrics".
+    let exposition = parse_openmetrics(
+        "# HELP foo My first counter.\n# TYPE foo counter\n# HELP bar My second counter.\n# TYPE bar counter\nbar_total 0\n# EOF",
+    )
+    .unwrap();
+
+    assert_eq!(exposition.families["foo"].help, "My first counter.");
+    assert_eq!(exposition.families["foo"].iter_samples().count(), 0);
+    assert_eq!(exposition.families["bar"].iter_samples().count(), 1);
+}
+
+#[test]
+fn families_with_similar_names_dont_clash() {
+    use crate::openmetrics::parse_openmetrics;
+
+    let exposition = parse_openmetrics("# TYPE foo gauge\n# TYPE foo_bar gauge\nfoo_bar 1\n# EOF\n").unwrap();
+    assert_eq!(exposition.families.len(), 2);
+}
